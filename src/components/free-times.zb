@@ -1,0 +1,57 @@
+<!--
+  The start times for a service on one day, each a button that holds that time. Which pieces of
+  each chair are taken is a Sync document only the server writes ('use collection busy by day'),
+  so when someone else holds or books a time, it greys out on every open page without a reload.
+  The server checks again when the button is pressed. A plain form post, so it works without
+  JavaScript.
+-->
+<script>
+  'use collection busy by day'
+  import { from } from '@zubra/runtime'
+
+  let taken = from(takenNow)
+
+  const toMin = (t) => Number(t.slice(0, 2)) * 60 + Number(t.slice(-2))
+  const piece = (m) => String(Math.floor(m / 60)).padStart(2, '0') + String(m % 60).padStart(2, '0')
+  // The same rule as the server's: someone who can do it is working then, and none of the
+  // pieces the booking takes is taken.
+  const fits = (one, time, all) => {
+    const start = toMin(time)
+    if (start < toMin(one.opens) || start + minutes > toMin(one.closes)) return false
+    const busy = (all ?? {})[one.id] ?? []
+    for (let at = start; at < start + minutes; at += slot) if (busy.includes(piece(at))) return false
+    return true
+  }
+  // The server can't run `fits`, so it sends each start with `free` already worked out; the
+  // element works it out itself once the live document changes.
+  const live = taken !== takenNow
+  const choices = starts.map((one) => ({ ...one, free: who.some((person) => fits(person, one.time, taken)) }))
+</script>
+<style>
+  :host { display: block; }
+  form { display: grid; gap: 0.75rem; }
+  ul { display: grid; grid-template-columns: repeat(auto-fill, minmax(6.5rem, 1fr)); gap: 0.5rem; margin: 0; padding: 0; list-style: none; }
+  button { width: 100%; font: inherit; font-weight: 700; padding: 0.55rem 0.4rem; border: 0; border-radius: 0.5rem; background: var(--primary, #2f4a46); color: var(--primary-foreground, #fff); cursor: pointer; }
+  button:disabled { background: var(--muted, #ece8e0); color: var(--muted-foreground, #5f6662); text-decoration: line-through; cursor: not-allowed; }
+  p { margin: 0; color: var(--muted-foreground, #5f6662); }
+</style>
+<free-times day="" date="" service="" staff="any" action="" starts={[]} who={[]} minutes={30} slot={15} taken-now={null}>
+  <form method="post" action={action}>
+    <input type="hidden" name="service" value={service}>
+    <input type="hidden" name="staff" value={staff}>
+    <input type="hidden" name="date" value={date}>
+    <p zb-if={!live && !starts.some((one) => one.free)}>Nothing free this day. Try another.</p>
+    <p zb-if={live && !choices.some((one) => one.free)}>Nothing free this day. Try another.</p>
+    <!-- As the server sent it, until the live document changes; then worked out here. -->
+    <ul aria-label="Start times" zb-if={!live}>
+      <zb-each items={starts} as="one" key={one.time}>
+        <li><button type="submit" name="time" value={one.time} disabled={!one.free} aria-label={one.free ? `Hold ${one.label}` : `${one.label}, taken`}>{one.label}</button></li>
+      </zb-each>
+    </ul>
+    <ul aria-label="Start times" zb-if={live}>
+      <zb-each items={choices} as="one" key={one.time}>
+        <li><button type="submit" name="time" value={one.time} disabled={!one.free} aria-label={one.free ? `Hold ${one.label}` : `${one.label}, taken`}>{one.label}</button></li>
+      </zb-each>
+    </ul>
+  </form>
+</free-times>

@@ -1,0 +1,27 @@
+<!--
+  A fund's total against its goal. The fund is a Sync document only the server writes ('use
+  collection funds by fund'), so every gift moves the bar on every open page without a reload.
+-->
+<script>
+  'use collection funds by fund'
+  import { from } from '@zubra/runtime'
+
+  let raised = from(raisedNow)
+  let gifts = from(giftsNow)
+
+  const dollars = (cents) => `$${Math.floor(cents / 100).toLocaleString('en-US')}`
+  const share = Math.min(100, Math.round((raised / goal) * 100))
+</script>
+<style>
+  :host { display: grid; gap: 0.4rem; }
+  .bar { height: 0.9rem; border-radius: 999px; background: var(--muted, #f1e9dd); overflow: hidden; }
+  .bar span { display: block; height: 100%; background: var(--accent, #e0b03c); }
+  p { margin: 0; }
+  strong { font-size: 1.35rem; }
+  small { color: var(--muted-foreground, #6d5f55); }
+</style>
+<fund-progress fund="" goal={1} raised-now={0} gifts-now={0}>
+  <div class="bar" role="progressbar" aria-label="Raised so far" aria-valuemin="0" aria-valuemax="100" aria-valuenow={String(share)}><span style:width={`${share}%`}></span></div>
+  <p><strong>{dollars(raised)}</strong> of {dollars(goal)} · {share}%</p>
+  <small zb-if={gifts > 0}>{gifts} {gifts === 1 ? 'gift' : 'gifts'} online so far</small>
+</fund-progress>

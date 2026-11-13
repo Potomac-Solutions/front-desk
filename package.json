@@ -1,0 +1,25 @@
+{
+  "name": "front-desk",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Appointments, forms, an events calendar and giving, for offices and community groups. A Potomac Solutions platform, built on the kit and Zubra.",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "test": "node --test --test-concurrency=1 \"test/*.test.js\""
+  },
+  "dependencies": {
+    "@potomac-solutions/kit": "github:Potomac-Solutions/kit#0ad64011ab11f8b5335722ee15ea3b1c40876bd8",
+    "@zubra/compiler": "5.10.2",
+    "@zubra/runtime": "5.10.2",
+    "@zubra/server": "5.10.2",
+    "@zubra/sync": "5.10.2"
+  },
+  "devDependencies": {
+    "playwright": "1.63.0"
+  },
+  "engines": {
+    "node": ">=22.13"
+  }
+}

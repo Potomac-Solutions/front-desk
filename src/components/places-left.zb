@@ -1,0 +1,26 @@
+<!--
+  How many places are left at an event. The event is a Sync document only the server writes
+  ('use collection events by event'), so when someone signs up or cancels, every open calendar
+  follows without a reload. Events with no limit say so.
+-->
+<script>
+  'use collection events by event'
+  import { from } from '@zubra/runtime'
+
+  let left = from(leftNow)
+
+  const full = capacity > 0 && left <= 0
+  const few = capacity > 0 && left > 0 && left <= Math.max(3, Math.ceil(capacity / 5))
+</script>
+<style>
+  :host { display: inline-block; }
+  span { display: inline-block; padding: 0.2rem 0.65rem; border-radius: 999px; font-size: 0.85rem; font-weight: 700; background: #e1f0e3; color: #1d4d27; }
+  .few { background: #f7ead2; color: #6a4210; }
+  .full { background: #ead9d9; color: #6b1f1f; }
+  .open { background: var(--muted, #f1e9dd); color: var(--muted-foreground, #6d5f55); }
+</style>
+<places-left event="" capacity={0} left-now={0}>
+  <span class="open" zb-if={!capacity}>Everyone welcome</span>
+  <span class="full" zb-if={full}>Full</span>
+  <span class:few={few} zb-if={capacity > 0 && !full}>{left} of {capacity} places left</span>
+</places-left>
