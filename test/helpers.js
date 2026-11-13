@@ -4,8 +4,19 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { createApp } from '../server.js';
 
+/** The owner every test business starts with. */
+export const OWNER = { email: 'owner@example.com', name: 'Test Owner', password: 'test owner password' };
+/** Cheap password hashing for tests. */
+export const STAFF_COST = { N: 2 ** 10, r: 8, p: 1 };
+
+/** One business (`site`) on its own server at localhost, with an owner already set up. */
 export async function start(dir, site, { name = site, ...options } = {}) {
-  const server = await createApp({ site, db: join(dir, `${name}.db`), cache: false, secret: 'test', ...options });
+  const server = await createApp({ tenants: [{ id: name, site, hosts: ['localhost'] }], dataDir: dir, cache: false, secret: 'test', staffCost: STAFF_COST, ...options });
+  const [link] = await server.open();
+  const space = await server.business(name);
+  const made = await space.staff.accept(link.token, OWNER);
+  if (!made.ok) throw new Error(made.error);
+  Object.assign(server, { desk: space.desk, staff: space.staff });
   await new Promise((done) => server.listen(0, done));
   return { server, base: `http://localhost:${server.address().port}` };
 }
@@ -49,6 +60,9 @@ export async function device(browser, errors, site, name, { javaScriptEnabled = 
     });
     return response.status();
   }
-  if (staff) await post('/staff/start', {});
+  if (staff) {
+    const signedIn = await post('/staff/sign-in', { email: OWNER.email, password: OWNER.password });
+    if (signedIn.location !== '/staff') throw new Error(`staff sign-in: ${signedIn.location}`);
+  }
   return { context, page, post, get, pullAll, push };
 }

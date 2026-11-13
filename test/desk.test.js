@@ -213,7 +213,7 @@ test('cancelling frees the time at once; the front desk can cancel too, and the 
   assert.match(await front.get('/staff'), /Text to 240-555-0199<\/strong>: Bo Fike, your colour with Jess on [^<]+ is cancelled/);
   // Without signing in, the desk's posts do nothing.
   const outsider = await open(app, 'outsider', { javaScriptEnabled: false });
-  assert.match(await outsider.get('/staff'), /Sign in to the front desk/);
+  assert.match(await outsider.get('/staff'), /<button type="submit">Sign in<\/button>/);
   assert.equal((await outsider.post('/staff/cancel', { key: again })).location, '/staff');
   await Promise.all([guest.context.close(), front.context.close(), outsider.context.close()]);
 });
@@ -276,7 +276,7 @@ test('a page reads which times are taken, never who took them; it writes nothing
   assert.equal(await nosy.push('busy', 'x', 'taken', {}), 403);
   assert.equal(await nosy.push('notes', 'x', 'text', 'hi'), 403);
   assert.equal((await nosy.post('/book/hold', colourTime(app), { 'sec-fetch-site': 'cross-site' })).status, 403);
-  assert.equal((await nosy.post('/staff/start', {}, { 'sec-fetch-site': 'cross-site' })).status, 403);
+  assert.equal((await nosy.post('/staff/sign-in', {}, { 'sec-fetch-site': 'cross-site' })).status, 403);
   // The salon has no calendar or giving.
   assert.equal((await nosy.context.request.get(`${app.base}/events`)).status(), 404);
   assert.equal((await nosy.context.request.get(`${app.base}/give`)).status(), 404);

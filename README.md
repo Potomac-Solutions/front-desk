@@ -2,7 +2,7 @@
 
 For the businesses and groups whose website is mostly a front desk: book an appointment, fill in a form, see what's on, sign up, give. Lawyers, insurance agents, accountants, salons and barbers, vets and daycares on one side; churches, volunteer fire companies, clubs, youth leagues, museums and libraries on the other. One app: a site switches on the modules it needs. A Potomac Solutions platform, built on the [kit](https://github.com/Potomac-Solutions/kit) and [Zubra](https://github.com/journey-to-code-org/zubra).
 
-It starts with two sites, both made up:
+One server runs several businesses, each at its own web address, each with its own data and its own staff. It starts with two, both made up:
 
 - **Yough Valley Hair Co.** in Oakland, Maryland: a two-chair salon. Appointments with intake questions, and a wedding-party enquiry form.
 - **Bittinger Volunteer Fire Company** in Bittinger, Maryland: an events calendar with sign-ups, a fund for a new engine, and forms to volunteer or book the hall.
@@ -11,17 +11,24 @@ No appointment, event or gift here is real. Payments are in test mode, and texts
 
 ## Try it
 
-`npm install`, then `npm start` for the salon or `SITE=community npm start` for the fire company, and open http://localhost:3000. Two browser windows side by side (one private, so it's another person) show the live parts best.
+`npm install`, then `npm start`. One server runs both businesses:
+
+- the salon at http://localhost:3000 (or http://salon.localhost:3000),
+- the fire company at http://127.0.0.1:3000 (or http://firehall.localhost:3000).
+
+The first time, nobody has an account, so the server prints a **setup link** for each business. Open it to make that business's owner: your email, name and a password. Then **Staff** in the footer is the sign-in page, and an owner's **People** page invites the rest of the staff (an invite is a link to send them), resets passwords and turns people off.
+
+Two browser windows side by side (one private, so it's another person) show the live parts best.
 
 **The salon**
 
 1. **Book.** Choose **Colour**, then Jess (Marco doesn't do colour), a day and a time. The time is held for you for ten minutes while you answer the colour questions; then **Book it**.
 2. **Watch the times.** In the other window, open the same day: your time is struck out, without a reload. Hold a time in one window and it greys out in the other; **Let this time go** and it's back.
 3. **Anyone.** Book a cut with **Anyone**: a time stays open while either chair is free.
-4. **The front desk.** Open **Staff** from the footer and sign in. The day sheet shows each chair's bookings with the answers; cancel one and the time is free again at once. **Texts and emails sent** shows the confirmations that would have gone out.
+4. **The front desk.** Open **Staff** from the footer and sign in as the owner. The day sheet shows each chair's bookings with the answers; cancel one and the time is free again at once. **Texts and emails sent** shows the confirmations that would have gone out.
 5. **A form.** Send a wedding-party enquiry; it's in the staff inbox, to mark handled.
 
-**The fire company** (`SITE=community`)
+**The fire company** (http://127.0.0.1:3000)
 
 1. **Sign up.** Open the CPR class and sign up for three places. The calendar in the other window counts down from 12 to 9, live. Cancel, and they're back.
 2. **Give.** Give to the engine fund with any card number (`4000 0000 0000 0002` is declined, to see that). The total on the home page moves in every open window.
@@ -33,9 +40,9 @@ Without JavaScript (turn it off in the browser's settings), all of it works the 
 
 | Piece | Job |
 | --- | --- |
-| [Potomac kit](https://github.com/Potomac-Solutions/kit) (private) | `hold` (each chair's day in 15-minute pieces, held while you fill in the details, then booked, and given back with `free` when cancelled; each event's places, all of a party or none), `pay` (gifts, test provider, charged once), `notify` (confirmations, kept in an outbox here), `auth` (guest and staff cookies), `store` (the Sync log) |
+| [Potomac kit](https://github.com/Potomac-Solutions/kit) (private) | `hold` (each chair's day in 15-minute pieces, held while you fill in the details, then booked, and given back with `free` when cancelled; each event's places, all of a party or none), `pay` (gifts, test provider, charged once), `notify` (confirmations, kept in an outbox here), `staff` (each business's owner and staff: passwords, sessions, invites, resets, roles), `tenant` and `tenancy` (the business from the host name, and its own log), `auth` (guests), `store` (the Sync log) |
 | `@zubra/server` | Renders every page before any JavaScript runs |
-| `@zubra/sync` | The log (one SQLite file). Which pieces of each chair are taken, each event's places left and the fund's total are documents only the server writes; pages follow them live, and never read who booked, signed up or gave |
+| `@zubra/sync` | Each business's log (one SQLite file each). Which pieces of each chair are taken, each event's places left and the fund's total are documents only the server writes; pages follow them live, and never read who booked, signed up or gave |
 | `src/site.js` | The two sites as data: modules switched on, staff and their hours, services with their questions, events, the fund, and every form's fields |
 | `src/desk.js` | The deciding: free times, holds and bookings, sign-ups, gifts, forms against their fields, the inbox |
 | `free-times`, `places-left`, `fund-progress` | The live parts |
@@ -44,12 +51,17 @@ Without JavaScript (turn it off in the browser's settings), all of it works the 
 
 ```sh
 npm install      # needs read access to the private Potomac-Solutions/kit repository
-npm start        # the salon, on http://localhost:3000
-SITE=community npm start
+npm start        # both businesses: the salon at localhost:3000, the fire company at 127.0.0.1:3000
 npm test         # needs Chrome or Playwright's Chromium
 ```
 
-Node 22.13 or later. `SESSION_SECRET` is required in production; `DATA_DIR` says where the database file goes (one per site).
+Node 22.13 or later. `SESSION_SECRET` is required in production, where cookies are `Secure` (and the staff cookie `__Host-`). `DATA_DIR` says where the database files go, one per business. `TENANTS` is the list of businesses, as JSON:
+
+```sh
+TENANTS='[{"id":"yough-valley-hair","site":"desk","hosts":["youghvalleyhair.com"]},{"id":"bittinger-vfc","site":"community","hosts":["bittingervfc.org"]}]'
+```
+
+A business's setup link is printed at start until it has an owner; each lasts a day, and a restart prints a fresh one.
 
 ## What the tests prove
 
@@ -75,11 +87,20 @@ The fire company (`test/community.test.js`):
 5. The volunteer form needs its tick box and a real choice; the hall form's numbers are checked.
 6. A page reads the events and the fund and nothing else; it writes nothing; the fire company has no appointments.
 
-Every behaviour was broken on purpose once to check a test fails (43 of 45 caught). The two that can't be: a page may write nothing because every collection is the server's, and a booking's later pieces are checked before holding even though the kit's `hold` already refuses the whole run if any piece is taken. Both checks stay as safety belts.
+Two businesses on one server, and their staff (`test/accounts.test.js`):
+
+1. Each host gets its own business, matched without case; a host nobody answers to is a 404, pages and live data alike.
+2. Each business's first owner sets up from its own setup link, once; a link means nothing at the other business; link pages aren't cached and send no `Referer`. A session at one business is nobody at the other, and the same email can be two different people.
+3. An owner invites staff (the link is shown on the page, not put in its address). Staff see the day sheet but can't open or use the owner's pages. Turning someone off ends their open session at once. The last owner can't step down. A reset link sets a new password, and the old one stops working.
+4. Five wrong passwords lock an email, even for the right password, and only at that business. Changing your password signs out your other devices. Signing out ends the session. Another site can't post a sign-in.
+5. Each business's live data is its own, and a page that asks for staff accounts, sessions or tokens gets none: no hashes, emails or names.
+
+Every behaviour was broken on purpose once to check a test fails (55 of 57 caught, 12 of them the staff and two-business wiring). The two that can't be: a page may write nothing because every collection is the server's, and a booking's later pieces are checked before holding even though the kit's `hold` already refuses the whole run if any piece is taken. Both checks stay as safety belts.
 
 ## Not yet
 
 - The owner's admin: services, staff hours, events, the fund and every form are data in `src/site.js` today.
-- Several sites on one server, chosen by hostname (the kit's `tenancy`), so each office isn't a deployment of its own.
-- Real texts and email (a sender behind the kit's `notify`), reminders the day before, staff accounts, and a real payment provider.
+- Real texts and email (a sender behind the kit's `notify`), so an invite or reset link is sent rather than copied; reminders the day before; a real payment provider.
+- Two-factor sign-in, and a rate limit per address in front of sign-in (the kit's lockout counts per email).
+- Which staff member is which person on the rota: an account isn't yet tied to Jess or Marco's chair.
 - Recurring events, a waiting list when an event is full, and deposits for appointments.

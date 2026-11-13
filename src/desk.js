@@ -82,23 +82,33 @@ export function readFields(fields, form) {
   return { values, answers };
 }
 
-export async function createDesk({ db = ':memory:', site: siteId = 'desk', now = Date.now, holdMs } = {}) {
-  const site = typeof siteId === 'string' ? sites[siteId] : siteId;
-  if (!site) throw new TypeError(`No site called ${siteId}`);
-  const on = site.modules;
-  holdMs ??= (site.holdMinutes ?? 10) * 60_000;
-
-  const sync = createSyncServer({
+/**
+ * A business's Sync server: its own log, and the rules pages live by. Pages write nothing (every
+ * collection here is the server's), and read which times are taken, the events' places left and
+ * the fund: no names. The kit's `serverOnly` also keeps staff accounts from every page.
+ */
+export async function deskSync({ db = ':memory:' } = {}) {
+  return createSyncServer({
     log: await sqliteLog(db),
-    // Pages write nothing: every collection here is the server's.
     authorize: serverOnly(
       [...SERVER_ONLY, 'slots', 'slot-holds', 'busy', 'pending', 'appointments', 'events', 'places', 'place-holds', 'rsvps', 'funds', 'gifts', 'inbox', 'messages'],
       ({ kind }) => kind === 'read',
     ),
-    // A page reads which times are taken, the events' places left and the fund: no names.
     scope: () => ({ busy: true, events: true, funds: true }),
   });
-  const store = await syncStore(sync);
+}
+
+/**
+ * A business's front desk, on its own log: `sync` and `store` when the kit's tenancy opened them,
+ * or a log of its own at `db`.
+ */
+export async function createDesk({ db = ':memory:', sync, store, site: siteId = 'desk', now = Date.now, holdMs } = {}) {
+  const site = typeof siteId === 'string' ? sites[siteId] : siteId;
+  if (!site) throw new TypeError(`No site called ${siteId}`);
+  const on = site.modules;
+  holdMs ??= (site.holdMinutes ?? 10) * 60_000;
+  sync ??= await deskSync({ db });
+  store ??= await syncStore(sync);
 
   const chairs = createHolds({ store, holdMs, ceilingMs: 3 * holdMs, max: 24, names: { units: 'slots', holders: 'slot-holds' }, now });
   const places = createHolds({ store, holdMs: 60_000, max: site.partyMax ?? 8, names: { units: 'places', holders: 'place-holds' }, now });
