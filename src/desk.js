@@ -27,7 +27,6 @@ import { moment } from '@potomac-solutions/kit/price';
 import { sites } from './site.js';
 
 const DAY_MS = 86_400_000;
-const FREE = { state: 'free', by: '', until: 0 };
 const newKey = (letter) => `${letter}${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
 const keyOf = (letter) => new RegExp(`^${letter}[a-z0-9]{8,24}$`);
 const minutes = (hhmm) => Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.slice(-2));
@@ -183,10 +182,6 @@ export async function createDesk({ db = ':memory:', site: siteId = 'desk', now =
 
   const appointmentWords = (appt) => ({ what: `${service(appt.service)?.name.toLowerCase()} with ${person(appt.staff)?.name}`, when: `${dateLabel(appt.date)} at ${timeLabel(appt.time)}` });
 
-  async function freePieces(collection, pool, units) {
-    await Promise.all(units.map((unit) => store.write(collection, `${pool}/${unit}`, FREE)));
-  }
-
   // ---- Events ------------------------------------------------------------------------------------
   const eventPool = (key) => `event/${key}`;
   const placeIds = (event) => Array.from({ length: event.capacity ?? 0 }, (_, i) => `p${i + 1}`);
@@ -309,7 +304,9 @@ export async function createDesk({ db = ':memory:', site: siteId = 'desk', now =
       if (!appt) return { error: 'That isn’t one of your appointments.' };
       if (appt.status !== 'booked') return { error: 'That appointment is already cancelled.' };
       if (!staff && `${appt.date} ${appt.time}` <= `${today().date} ${today().time}`) return { error: 'That appointment has started. Call us.' };
-      await freePieces('slots', appt.pool, appt.units);
+      // The kit gives the chair's pieces back (they were the guest's, taken when booked).
+      const freed = await chairs.free(appt.owner, appt.pool, appt.units);
+      if (freed.error) return { error: 'That time has already been given back.' };
       await store.write('appointments', key, { status: 'cancelled', cancelledAt: now(), cancelledBy: staff ? 'staff' : 'guest' });
       await refreshBusy(appt.date);
       await tell(appt, 'cancelled', { name: appt.name, what: appt.what, when: appt.when });
@@ -391,7 +388,8 @@ export async function createDesk({ db = ':memory:', site: siteId = 'desk', now =
     async cancelRsvp(guest, key) {
       const rsvp = this.rsvp(guest, key);
       if (!rsvp || rsvp.status !== 'booked') return { error: 'That isn’t one of your sign-ups.' };
-      await freePieces('places', eventPool(rsvp.event.key), rsvp.places);
+      const freed = await places.free(rsvp.owner, eventPool(rsvp.event.key), rsvp.places);
+      if (freed.error) return { error: 'Those places have already been given back.' };
       await store.write('rsvps', key, { status: 'cancelled', cancelledAt: now() });
       await setLeft(rsvp.event.key, rsvp.event);
       return { ok: true, rsvp };

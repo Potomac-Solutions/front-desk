@@ -33,7 +33,7 @@ Without JavaScript (turn it off in the browser's settings), all of it works the 
 
 | Piece | Job |
 | --- | --- |
-| [Potomac kit](https://github.com/Potomac-Solutions/kit) (private) | `hold` (each chair's day in 15-minute pieces, held while you fill in the details, then booked; each event's places, all of a party or none), `pay` (gifts, test provider, charged once), `notify` (confirmations, kept in an outbox here), `auth` (guest and staff cookies), `store` (the Sync log) |
+| [Potomac kit](https://github.com/Potomac-Solutions/kit) (private) | `hold` (each chair's day in 15-minute pieces, held while you fill in the details, then booked, and given back with `free` when cancelled; each event's places, all of a party or none), `pay` (gifts, test provider, charged once), `notify` (confirmations, kept in an outbox here), `auth` (guest and staff cookies), `store` (the Sync log) |
 | `@zubra/server` | Renders every page before any JavaScript runs |
 | `@zubra/sync` | The log (one SQLite file). Which pieces of each chair are taken, each event's places left and the fund's total are documents only the server writes; pages follow them live, and never read who booked, signed up or gave |
 | `src/site.js` | The two sites as data: modules switched on, staff and their hours, services with their questions, events, the fund, and every form's fields |
@@ -83,4 +83,3 @@ Every behaviour was broken on purpose once to check a test fails (43 of 45 caugh
 - Several sites on one server, chosen by hostname (the kit's `tenancy`), so each office isn't a deployment of its own.
 - Real texts and email (a sender behind the kit's `notify`), reminders the day before, staff accounts, and a real payment provider.
 - Recurring events, a waiting list when an event is full, and deposits for appointments.
-- The kit's `hold` has no way to give back a unit once it's taken, so cancelling writes the pieces free here; that belongs in the kit.
