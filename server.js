@@ -17,6 +17,7 @@ import { fileURLToPath } from 'node:url';
 import { createZubra } from '@zubra/server';
 import { signedCookie } from '@potomac-solutions/kit/auth';
 import { createStaff } from '@potomac-solutions/kit/staff';
+import { staffPages } from '@potomac-solutions/kit/staff/pages';
 import { createTenants } from '@potomac-solutions/kit/tenant';
 import { createTenancy } from '@potomac-solutions/kit/tenancy';
 import { createDesk, deskSync, CONTACT, timeLabel, dateLabel } from './src/desk.js';
@@ -265,74 +266,13 @@ ${sheet.map((one) => `<h3>${escape(one.name)}</h3>${one.appointments.length ? `<
     return parts.join('\n');
   }
 
-  // ---- Staff accounts: signing in, links, people ------------------------------------------------
-  const noStore = (res) => {
-    res.setHeader('cache-control', 'no-store');
-    // A link token in the address must not leave in a Referer header.
-    res.setHeader('referrer-policy', 'no-referrer');
-  };
-  function signInPage(url) {
-    const nobody = staff.needsOwner();
-    return `<section><h1>${on.appointments ? 'The front desk' : 'The office'}</h1><p class="lede">For ${escape(site.name)}’s staff.</p></section>
-${note(url)}
-${nobody ? '<p class="bulletin">Nobody has an account here yet. The first owner’s setup link is in the server’s log.</p>' : ''}
-<form class="panel" method="post" action="/staff/sign-in">
-  <label for="f-email">Email<input id="f-email" type="email" name="email" autocomplete="username" required></label>
-  <label for="f-password">Password<input id="f-password" type="password" name="password" autocomplete="current-password" required></label>
-  <button type="submit">Sign in</button>
-</form>
-<p class="hint">Forgot your password? Ask an owner for a reset link.</p>`;
-  }
-  function acceptPage(raw, problem = '') {
-    const link = staff.peek(raw);
-    if (!link) return `<section><h1>That link has expired</h1><p class="lede">Links work once, for a week. Ask an owner for a new one.</p></section>`;
-    const heading = link.kind === 'reset' ? 'Choose a new password' : link.setup ? `Set up ${escape(site.name)}` : `Join ${escape(site.name)}`;
-    const lede = link.kind === 'reset' ? `For ${escape(link.email)}.` : link.setup ? 'You’ll be the owner: you can invite the rest of the staff.' : `For ${escape(link.email)}.`;
-    return `<section><h1>${heading}</h1><p class="lede">${lede}</p></section>
-${problem ? `<p class="notice" role="alert">${escape(problem)}</p>` : ''}
-<form class="panel" method="post" action="/staff/accept">
-  <input type="hidden" name="token" value="${escape(raw)}">
-  ${link.setup ? '<label for="f-email">Your email<input id="f-email" type="email" name="email" autocomplete="username" required></label>' : ''}
-  ${link.kind === 'invite' ? `<label for="f-name">Your name<input id="f-name" name="name" value="${escape(link.name)}" autocomplete="name" maxlength="80" required></label>` : ''}
-  <label for="f-password">${link.kind === 'reset' ? 'New password' : 'Choose a password'}<span class="hint">At least 10 characters.</span><input id="f-password" type="password" name="password" autocomplete="new-password" minlength="10" required></label>
-  <button type="submit">${link.kind === 'reset' ? 'Set it and sign in' : 'Make my account'}</button>
-</form>`;
-  }
-  const linkTo = (req, raw) => `${secure ? 'https' : 'http'}://${req.headers.host}/staff/accept?token=${raw}`;
-  function peoplePage(url, who, shown = null) {
-    const people = staff.list();
-    return `<section><h1>People</h1><p class="lede">Who can sign in to ${escape(site.name)}’s staff pages.</p></section>
-${note(url)}
-${shown ? `<section class="panel" role="status"><h2>${escape(shown.title)}</h2><p>Send this link to ${escape(shown.to)}. It works once, within a week.</p><p><input readonly value="${escape(shown.link)}" aria-label="The link" style="width:100%"></p></section>` : ''}
-<section class="panel"><h2>Everyone</h2><table><tbody>${people
-      .map(
-        (one) => `<tr${one.disabled ? ' class="done"' : ''}><td><strong>${escape(one.name)}</strong>${one.account === who.account ? ' (you)' : ''}<br><small>${escape(one.email)}</small></td><td>${one.disabled ? 'Turned off' : one.roles.includes('owner') ? 'Owner' : 'Staff'}</td><td class="row">
-<form method="post" action="/staff/people/role"><input type="hidden" name="account" value="${one.account}"><input type="hidden" name="role" value="${one.roles.includes('owner') ? 'staff' : 'owner'}"><button class="button light" type="submit">${one.roles.includes('owner') ? 'Make staff' : 'Make owner'}</button></form>
-<form method="post" action="/staff/people/${one.disabled ? 'on' : 'off'}"><input type="hidden" name="account" value="${one.account}"><button class="button light" type="submit">${one.disabled ? 'Turn on' : 'Turn off'}</button></form>
-${one.disabled ? '' : `<form method="post" action="/staff/people/reset"><input type="hidden" name="account" value="${one.account}"><button class="button light" type="submit">Reset link</button></form>`}</td></tr>`,
-      )
-      .join('')}</tbody></table></section>
-<form class="panel" method="post" action="/staff/people/invite"><h2>Invite someone</h2>
-  <label for="f-email">Their email<input id="f-email" type="email" name="email" required></label>
-  <label for="f-name">Their name<input id="f-name" name="name" maxlength="80"></label>
-  <label for="f-role">What they can do<select id="f-role" name="role"><option value="staff">Staff: the day sheet, sign-ups, giving and the inbox</option><option value="owner">Owner: all that, and people</option></select></label>
-  <button type="submit">Make an invite link</button>
-</form>`;
-  }
-  const passwordPage = (url) => `<section><h1>Your password</h1></section>
-${note(url)}
-<form class="panel" method="post" action="/staff/password">
-  <label for="f-current">Current password<input id="f-current" type="password" name="current" autocomplete="current-password" required></label>
-  <label for="f-next">New password<span class="hint">At least 10 characters. Your other devices are signed out.</span><input id="f-next" type="password" name="next" autocomplete="new-password" minlength="10" required></label>
-  <button type="submit">Change it</button>
-</form>`;
-  const signedInBar = (who) => `<p class="hint">Signed in as ${escape(who.name)}${staff.can(who, 'owner') ? ' · <a href="/staff/people">People</a>' : ''} · <a href="/staff/password">Your password</a> · <form class="inline" method="post" action="/staff/sign-out"><button class="button light" type="submit">Sign out</button></form></p>`;
+  // ---- Staff accounts: sign-in, links, people and passwords (the kit's pages) -------------------
+  const pages = staffPages({ staff, home: '/staff', business: site.name, secure, render: (res, title, body) => page(res, zubra.page(), title, body) });
 
   /** Answer one request for this business. */
   return async function handle(req, res, url, guest) {
     const who = staff.session(req);
     const atDesk = staff.can(who, 'staff');
-    const isOwner = staff.can(who, 'owner');
     if (req.method === 'POST') {
       // Every form is ours: another site's post is refused (the cookies are SameSite=Lax too).
       if (req.headers['sec-fetch-site'] === 'cross-site') return send(res, 403, 'Forbidden');
@@ -377,53 +317,10 @@ ${note(url)}
         const done = await desk.send(sending[1], form);
         return back(res, done.ok ? withDone(`/forms/${sending[1]}`, 'Sent. We’ll be in touch.') : withProblem(`/forms/${sending[1]}`, done));
       }
-      if (path === '/staff/sign-in') {
-        const done = await staff.signIn(form.get('email'), form.get('password'));
-        if (done.error) return back(res, withProblem('/staff', { error: done.error === 'locked' ? 'Too many tries. Wait 15 minutes, or ask an owner for a reset link.' : 'That email and password don’t match.' }));
-        res.setHeader('set-cookie', done.cookie);
-        return back(res, '/staff');
-      }
-      if (path === '/staff/accept') {
-        noStore(res);
-        const raw = String(form.get('token') ?? '');
-        const done = await staff.accept(raw, { email: form.get('email'), name: form.get('name'), password: form.get('password') });
-        if (done.error) return page(res, zubra.page(), 'Your account', acceptPage(raw, done.error));
-        res.setHeader('set-cookie', done.cookie);
-        return back(res, withDone('/staff', 'You’re signed in.'));
-      }
-      if (path === '/staff/sign-out') {
-        const done = await staff.signOut(req);
-        res.setHeader('set-cookie', done.cookie);
-        return back(res, withDone('/staff', 'Signed out.'));
-      }
+      if (await pages.handle(req, res, url, form)) return;
       if (path.startsWith('/staff/')) {
         if (!atDesk) return back(res, '/staff');
         const key = String(form.get('key') ?? '');
-        if (path === '/staff/password') {
-          const done = await staff.changePassword(who, form.get('current'), form.get('next'));
-          return back(res, done.ok ? withDone('/staff', 'Password changed. Your other devices are signed out.') : withProblem('/staff/password', done));
-        }
-        if (path.startsWith('/staff/people/')) {
-          if (!isOwner) return back(res, '/staff');
-          noStore(res);
-          const account = String(form.get('account') ?? '');
-          const role = form.get('role') === 'owner' ? ['owner'] : ['staff'];
-          if (path === '/staff/people/invite') {
-            const email = String(form.get('email') ?? '');
-            const done = await staff.invite(who, { email, name: form.get('name') ?? '', roles: role });
-            if (done.error) return back(res, withProblem('/staff/people', done));
-            return page(res, zubra.page(), 'People', peoplePage(url, who, { title: 'Invite link', to: email.trim(), link: linkTo(req, done.token) }));
-          }
-          if (path === '/staff/people/reset') {
-            const done = await staff.resetLink(who, account);
-            if (done.error) return back(res, withProblem('/staff/people', done));
-            const person = staff.list().find((one) => one.account === account);
-            return page(res, zubra.page(), 'People', peoplePage(url, who, { title: 'Reset link', to: person.name, link: linkTo(req, done.token) }));
-          }
-          const done = path === '/staff/people/role' ? await staff.setRoles(who, account, role) : path === '/staff/people/off' ? await staff.setDisabled(who, account, true) : path === '/staff/people/on' ? await staff.setDisabled(who, account, false) : null;
-          if (!done) return send(res, 404, 'Not found');
-          return back(res, done.ok ? withDone('/staff/people', 'Done.') : withProblem('/staff/people', done));
-        }
         if (on.appointments && path === '/staff/cancel') {
           const done = await desk.cancel(null, key, { staff: true });
           return back(res, done.ok ? withDone(`/staff?day=${done.appt.date}`, `${done.appt.name}’s appointment is cancelled; we’ve texted them.`) : withProblem('/staff', done));
@@ -466,24 +363,11 @@ ${note(url)}
     const showing = path.match(/^\/forms\/([a-z-]+)$/);
     const form = showing && desk.form(showing[1]);
     if (form) return page(res, p, form.title, formPage(url, form));
+    if (await pages.handle(req, res, url, null)) return;
     if (path === '/staff') {
-      noStore(res);
-      if (!atDesk) return page(res, p, 'Sign in', signInPage(url));
-      return page(res, p, 'Staff', signedInBar(who) + staffPage(p, url));
-    }
-    if (path === '/staff/accept') {
-      noStore(res);
-      return page(res, p, 'Your account', acceptPage(url.searchParams.get('token') ?? ''));
-    }
-    if (path === '/staff/password') {
-      if (!atDesk) return back(res, '/staff');
-      noStore(res);
-      return page(res, p, 'Your password', passwordPage(url));
-    }
-    if (path === '/staff/people') {
-      if (!isOwner) return back(res, '/staff');
-      noStore(res);
-      return page(res, p, 'People', peoplePage(url, who));
+      pages.noStore(res);
+      if (!atDesk) return page(res, p, 'Sign in', pages.signIn(url));
+      return page(res, p, 'Staff', pages.bar(who) + staffPage(p, url));
     }
     send(res, 404, 'Not found');
   };

@@ -154,7 +154,8 @@ test('free times are live: someone else holding or letting go of a time shows at
   await watcher.page.waitForTimeout(400);
   await watcher.page.waitForFunction((time) => !document.querySelector(`free-times button[value="${time}"]`)?.disabled, at.time, { timeout: 5000 });
   // "Anyone": a time stays open while either person is free for it.
-  const cut = app.server.desk.days('cut', 'any').find(({ date }) => app.server.desk.whoCan('cut', 'any', date).length === 2).date;
+  // The last day both work: earlier tests fill the first days, and late in the day today has few times left.
+  const cut = app.server.desk.days('cut', 'any').filter(({ date }) => app.server.desk.whoCan('cut', 'any', date).length === 2).at(-1).date;
   const freeWith = (staff) => new Set(app.server.desk.times('cut', staff, cut).filter((one) => one.free).map((one) => one.time));
   const both = [...freeWith('jess')].reverse().find((time) => freeWith('marco').has(time));
   await watcher.page.goto(`${app.base}/book/cut?staff=any&date=${cut}`);
