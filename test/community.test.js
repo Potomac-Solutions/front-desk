@@ -86,7 +86,9 @@ test('places run out: only as many as are left, never more than a party, and the
   assert.ok(answers.some((one) => one.location.endsWith('problem=Only 1 place left.')));
   assert.match((await signUp(people[3], 'CPR', 1)).location, /done=/);
   assert.equal(event('CPR').left, 0);
-  assert.equal((await signUp(people[2], 'CPR', 1)).location, `/events/${event('CPR').key}?problem=Sorry, it’s full.`);
+  // Whichever of the two didn't get in is told it's full (the one that did is already signed up).
+  const loser = answers[0].location.includes('done=') ? people[2] : people[1];
+  assert.equal((await signUp(loser, 'CPR', 1)).location, `/events/${event('CPR').key}?problem=Sorry, it’s full.`);
   // Places are never handed out twice.
   const given = app.server.desk.rsvpsAt(event('CPR').key).flatMap((one) => one.places);
   assert.equal(new Set(given).size, 12);

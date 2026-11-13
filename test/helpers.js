@@ -1,8 +1,16 @@
+import assert from 'node:assert/strict';
 // What both walks share: a server on a free port, a browser, and a "device" (one person's
 // browser context) that can also post forms and read the Sync log directly.
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { createApp } from '../server.js';
+
+// A redirect's location as words: the signature on its message (kit/notice) checked and taken off.
+const plain = (location) => {
+  location = String(location ?? '');
+  if (/[?&](problem|done)=/.test(location) && !location.startsWith('?')) assert.match(location, /&sig=[\w-]{22}/, `unsigned message: ${location}`);
+  return decodeURIComponent(location.replace(/&sig=[\w-]+/, '').replaceAll('+', ' '));
+};
 
 /** The owner every test business starts with. */
 export const OWNER = { email: 'owner@example.com', name: 'Test Owner', password: 'test owner password' };
@@ -37,7 +45,7 @@ export async function device(browser, errors, site, name, { javaScriptEnabled = 
   await page.goto(site.base);
   const post = async (path, form, headers = {}) => {
     const response = await context.request.post(`${site.base}${path}`, { form, headers, maxRedirects: 0 });
-    return { status: response.status(), location: decodeURIComponent(response.headers().location ?? '') };
+    return { status: response.status(), location: plain(response.headers().location ?? '') };
   };
   const get = async (path) => (await context.request.get(`${site.base}${path}`)).text();
   /** Every change the log will send this page, asking for `collections` and more. */

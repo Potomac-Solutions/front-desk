@@ -9,7 +9,14 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { chromium } from 'playwright';
 import { createApp } from '../server.js';
-import { launch, STAFF_COST } from './helpers.js';
+import { launch, start, stop, OWNER, STAFF_COST } from './helpers.js';
+
+// A redirect's location as words: the signature on its message (kit/notice) checked and taken off.
+const plain = (location) => {
+  location = String(location ?? '');
+  if (/[?&](problem|done)=/.test(location) && !location.startsWith('?')) assert.match(location, /&sig=[\w-]{22}/, `unsigned message: ${location}`);
+  return decodeURIComponent(location.replace(/&sig=[\w-]+/, '').replaceAll('+', ' '));
+};
 
 const dir = mkdtempSync(join(tmpdir(), 'front-desk-accounts-'));
 const errors = [];
@@ -61,7 +68,7 @@ async function person(base, name) {
   page.on('pageerror', (error) => errors.push(`${name}: ${error.message}`));
   const post = async (path, form, headers = {}) => {
     const response = await context.request.post(`${base}${path}`, { form, headers, maxRedirects: 0 });
-    return { status: response.status(), location: decodeURIComponent(response.headers().location ?? ''), text: await response.text() };
+    return { status: response.status(), location: plain(response.headers().location ?? ''), text: await response.text() };
   };
   return { context, page, post };
 }
@@ -217,4 +224,23 @@ test('each business’s live data is its own, and no page can read anyone’s ac
   assert.deepEqual([...new Set(fireChanges.map((change) => change.collection))].sort(), ['events', 'funds']);
   for (const changes of [salonChanges, fireChanges]) assert.ok(!/scrypt|@example\.com|Pat Friend/.test(JSON.stringify(changes)), 'no hashes, emails or names');
   await neighbour.context.close();
+});
+
+test('behind a proxy: someone guessing locks out their own address, not the owner on theirs', async () => {
+  const site = await start(dir, 'desk', { name: 'behind-proxy', proxies: 1 });
+  try {
+    const post = (path, form, from) =>
+      fetch(`${site.base}${path}`, { method: 'POST', redirect: 'manual', headers: { 'content-type': 'application/x-www-form-urlencoded', 'x-forwarded-for': from }, body: new URLSearchParams(form) });
+    const where = async (response) => plain((await response).headers.get('location'));
+    // The guesser also sends its own X-Forwarded-For entry each time; only the proxy's counts.
+    for (let i = 0; i < 4; i++) assert.equal(await where(post('/staff/sign-in', { email: OWNER.email, password: `guess ${i} xxxxxx` }, `10.9.9.${i}, 203.0.113.9`)), '/staff?problem=That email and password don’t match.');
+    assert.match(await where(post('/staff/sign-in', { email: OWNER.email, password: 'guess 5 xxxxxx' }, '10.9.9.9, 203.0.113.9')), /Too many tries/);
+    assert.match(await where(post('/staff/sign-in', { email: OWNER.email, password: OWNER.password }, '203.0.113.9')), /Too many tries/, 'the guesser stays locked out');
+    assert.equal(await where(post('/staff/sign-in', { email: OWNER.email, password: OWNER.password }, '198.51.100.4')), '/staff', 'the owner gets in from her own phone');
+    // A message typed into a link doesn't show on the real page.
+    const typed = await (await fetch(`${site.base}/staff?problem=${encodeURIComponent('Your password expired. Call 555-0100.')}`)).text();
+    assert.doesNotMatch(typed, /555-0100/);
+  } finally {
+    await stop(site.server);
+  }
 });

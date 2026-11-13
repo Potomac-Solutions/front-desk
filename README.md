@@ -55,7 +55,7 @@ npm start        # both businesses: the salon at localhost:3000, the fire compan
 npm test         # needs Chrome or Playwright's Chromium
 ```
 
-Node 22.13 or later. `SESSION_SECRET` is required in production, where cookies are `Secure` (and the staff cookie `__Host-`). `DATA_DIR` says where the database files go, one per business. `TENANTS` is the list of businesses, as JSON:
+Node 22.13 or later. `SESSION_SECRET` is required in production, where cookies are `Secure` (and the staff cookie `__Host-`). `DATA_DIR` says where the database files go, one per business. `TENANTS` is the list of businesses, as JSON: Behind a proxy (Railway, Fly, a load balancer), set `TRUST_PROXIES` to how many add to `X-Forwarded-For` (usually `1`), so a wrong-password lockout falls on the device guessing and not on everyone; left unset, no header is trusted and every sign-in counts as the proxy's address.
 
 ```sh
 TENANTS='[{"id":"yough-valley-hair","site":"desk","hosts":["youghvalleyhair.com"]},{"id":"bittinger-vfc","site":"community","hosts":["bittingervfc.org"]}]'

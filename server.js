@@ -18,6 +18,7 @@ import { createZubra } from '@zubra/server';
 import { signedCookie } from '@potomac-solutions/kit/auth';
 import { createStaff } from '@potomac-solutions/kit/staff';
 import { staffPages } from '@potomac-solutions/kit/staff/pages';
+import { createNotices } from '@potomac-solutions/kit/notice';
 import { createTenants } from '@potomac-solutions/kit/tenant';
 import { createTenancy } from '@potomac-solutions/kit/tenancy';
 import { createDesk, deskSync, CONTACT, timeLabel, dateLabel } from './src/desk.js';
@@ -50,6 +51,9 @@ export async function createApp({
   now = Date.now,
   holdMs,
   staffCost,
+  // How many proxies in front add to X-Forwarded-For (1 on Railway), so sign-in counts failures by
+  // the real address. 0 trusts no header.
+  proxies = Number(process.env.TRUST_PROXIES ?? 0),
 } = {}) {
   if (!secret) {
     if (process.env.NODE_ENV === 'production') throw new Error('Set SESSION_SECRET.');
@@ -77,11 +81,14 @@ export async function createApp({
   const clockAt = (at) => new Date(at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: site.timeZone }).toLowerCase();
 
   const send = (res, status, html) => (res.writeHead(status, { 'content-type': 'text/html; charset=utf-8' }), res.end(html));
-  const back = (res, location) => (res.writeHead(303, { location }), res.end());
+  // A message in an address shows only if the server signed it (kit/notice), so a link can't put
+  // its own words in a page's alert.
+  const notices = createNotices({ secret });
+  const back = (res, location) => (res.writeHead(303, { location: notices.sign(location) }), res.end());
   const page = (res, p, title, body) => send(res, 200, p.finish(layout({ title, site, body })));
   const note = (url) => {
-    const problem = (url.searchParams.get('problem') ?? '').slice(0, 200);
-    const done = (url.searchParams.get('done') ?? '').slice(0, 200);
+    const problem = notices.read(url).problem;
+    const done = notices.read(url).done;
     return `${problem ? `<p class="notice" role="alert">${escape(problem)}</p>` : ''}${done ? `<p class="ok" role="status">${escape(done)}</p>` : ''}`;
   };
   const withProblem = (path, answer) => `${path}${path.includes('?') ? '&' : '?'}problem=${encodeURIComponent(answer.error)}`;
@@ -267,7 +274,7 @@ ${sheet.map((one) => `<h3>${escape(one.name)}</h3>${one.appointments.length ? `<
   }
 
   // ---- Staff accounts: sign-in, links, people and passwords (the kit's pages) -------------------
-  const pages = staffPages({ staff, home: '/staff', business: site.name, secure, render: (res, title, body) => page(res, zubra.page(), title, body) });
+  const pages = staffPages({ staff, notices, proxies, home: '/staff', business: site.name, secure, render: (res, title, body) => page(res, zubra.page(), title, body) });
 
   /** Answer one request for this business. */
   return async function handle(req, res, url, guest) {
