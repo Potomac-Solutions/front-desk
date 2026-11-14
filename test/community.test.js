@@ -31,7 +31,7 @@ test('without JavaScript: the calendar, signing up for places, and giving them b
   const guest = await open('neighbour', { javaScriptEnabled: false });
   const { page } = guest;
   assert.match(await page.locator('main').innerText(), /\$18,400 of \$25,000 · 74%/, 'the fund, without JavaScript');
-  assert.match(await page.locator('main').innerText(), /Burn ban[\s\S]*Coming up[\s\S]*pancake breakfast[\s\S]*Everyone welcome[\s\S]*CPR and first-aid class[\s\S]*12 of 12 places left/);
+  assert.match(await page.locator('main').innerText(), /closed Thanksgiving week[\s\S]*Coming up[\s\S]*pancake breakfast[\s\S]*Everyone welcome[\s\S]*CPR and first-aid class[\s\S]*12 of 12 places left/);
   await page.click('footer a[href="/events"]');
   assert.equal(await page.locator('.card').count(), 4);
   assert.match(await page.locator('main').innerText(), /NOVEMBER|DECEMBER/);

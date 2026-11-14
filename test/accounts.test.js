@@ -31,7 +31,7 @@ before(async () => {
   server = await createApp({
     tenants: [
       { id: 'yough-valley-hair', site: 'desk', hosts: ['localhost'] },
-      { id: 'bittinger-vfc', site: 'community', hosts: ['127.0.0.1'] },
+      { id: 'pine-hollow-vfc', site: 'community', hosts: ['127.0.0.1'] },
     ],
     dataDir: dir,
     cache: false,
@@ -75,9 +75,9 @@ async function person(base, name) {
 const tokenOf = (link) => new URL(link).searchParams.get('token');
 
 test('one server, two businesses by host name; a host nobody answers to is a 404', async () => {
-  assert.deepEqual(links.map((link) => link.tenant.id), ['yough-valley-hair', 'bittinger-vfc'], 'a setup link for each, since nobody has an account');
+  assert.deepEqual(links.map((link) => link.tenant.id), ['yough-valley-hair', 'pine-hollow-vfc'], 'a setup link for each, since nobody has an account');
   assert.match((await raw(`localhost:${port}`, '/')).text, /<h1>Yough Valley Hair Co\.<\/h1>/);
-  assert.match((await raw(`127.0.0.1:${port}`, '/')).text, /<h1>Bittinger Volunteer Fire Company<\/h1>/);
+  assert.match((await raw(`127.0.0.1:${port}`, '/')).text, /<h1>Pine Hollow Volunteer Fire Company<\/h1>/);
   assert.match((await raw(`www.localhost:${port}`.replace('www.localhost', 'LOCALHOST'), '/')).text, /Yough Valley/, 'host names are matched without case');
   const stranger = await raw(`example.org:${port}`, '/');
   assert.equal(stranger.status, 404);
@@ -89,7 +89,7 @@ test('one server, two businesses by host name; a host nobody answers to is a 404
 
 test('the first owner of each business sets up from that business’s own link, once', async () => {
   const salonLink = links.find((link) => link.tenant.id === 'yough-valley-hair').token;
-  const fireLink = links.find((link) => link.tenant.id === 'bittinger-vfc').token;
+  const fireLink = links.find((link) => link.tenant.id === 'pine-hollow-vfc').token;
   // A link token is only good at its own business.
   assert.match((await raw(`127.0.0.1:${port}`, `/staff/accept?token=${salonLink}`)).text, /That link has expired/);
   const page = await raw(`localhost:${port}`, `/staff/accept?token=${salonLink}`);
@@ -109,7 +109,7 @@ test('the first owner of each business sets up from that business’s own link, 
   await rosa.page.waitForURL(/\/staff\?done=/);
   assert.match(await rosa.page.locator('main').innerText(), /Signed in as Rosa Bittinger[\s\S]*People[\s\S]*The front desk[\s\S]*Appointments/);
   assert.match((await raw(`localhost:${port}`, `/staff/accept?token=${salonLink}`)).text, /That link has expired/, 'used');
-  assert.deepEqual(await server.open().then((more) => more.map((link) => link.tenant.id)), ['bittinger-vfc'], 'only the fire company still needs an owner');
+  assert.deepEqual(await server.open().then((more) => more.map((link) => link.tenant.id)), ['pine-hollow-vfc'], 'only the fire company still needs an owner');
 
   // The salon's session means nothing at the fire company.
   const cookie = (await rosa.context.cookies(salon())).find((one) => one.name === 'staff');
@@ -119,7 +119,7 @@ test('the first owner of each business sets up from that business’s own link, 
   const made = await dale.post('/staff/accept', { token: fireLink, email: 'dale@example.com', name: 'Dale Glotfelty', password: 'fire hall password' });
   assert.equal(made.location, '/staff?done=You’re signed in.');
   // The same email at the other business is a different person, with a different password.
-  assert.deepEqual((await (await server.business('bittinger-vfc')).staff.list()).map((one) => one.email), ['dale@example.com']);
+  assert.deepEqual((await (await server.business('pine-hollow-vfc')).staff.list()).map((one) => one.email), ['dale@example.com']);
   assert.equal((await rosa.post('/staff/sign-in', { email: 'dale@example.com', password: 'fire hall password' })).location, '/staff?problem=That email and password don’t match.');
   await rosa.context.close();
   await dale.context.close();
@@ -199,7 +199,7 @@ test('each business’s live data is its own, and no page can read anyone’s ac
   // A question sent to the fire company reaches only the fire company's inbox.
   const neighbour = await person(fire(), 'neighbour');
   await neighbour.post('/forms/hall', { name: 'Pat Friend', phone: '301-555-0177', date: '2027-02-14', guests: '40' });
-  const fireDesk = (await server.business('bittinger-vfc')).desk;
+  const fireDesk = (await server.business('pine-hollow-vfc')).desk;
   const salonDesk = (await server.business('yough-valley-hair')).desk;
   assert.equal(fireDesk.inbox().length, 1);
   assert.equal(salonDesk.inbox().length, 0);

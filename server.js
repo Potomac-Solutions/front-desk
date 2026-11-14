@@ -18,6 +18,7 @@ import { createZubra } from '@zubra/server';
 import { signedCookie } from '@potomac-solutions/kit/auth';
 import { createStaff } from '@potomac-solutions/kit/staff';
 import { staffPages } from '@potomac-solutions/kit/staff/pages';
+import { demoOwner, lockedDemo, demoSignIn, nightly } from './src/demo.js';
 import { createNotices } from '@potomac-solutions/kit/notice';
 import { createTenants } from '@potomac-solutions/kit/tenant';
 import { createTenancy } from '@potomac-solutions/kit/tenancy';
@@ -38,7 +39,7 @@ const dayKey = (date) => date.replaceAll('-', '');
  */
 export const DEFAULT_TENANTS = [
   { id: 'yough-valley-hair', site: 'desk', hosts: ['localhost', 'salon.localhost'] },
-  { id: 'bittinger-vfc', site: 'community', hosts: ['127.0.0.1', 'firehall.localhost'] },
+  { id: 'pine-hollow-vfc', site: 'community', hosts: ['127.0.0.1', 'firehall.localhost'] },
 ];
 const tenantsFromEnv = () => (process.env.TENANTS ? JSON.parse(process.env.TENANTS) : null);
 
@@ -54,7 +55,11 @@ export async function createApp({
   // How many proxies in front add to X-Forwarded-For (1 on Railway), so sign-in counts failures by
   // the real address. 0 trusts no header.
   proxies = Number(process.env.TRUST_PROXIES ?? 0),
+  // The public demo (src/demo.js): a demo owner per business, shown on the sign-in page, and data
+  // kept in memory so a restart is a reset.
+  demo = process.env.DEMO === '1',
 } = {}) {
+  if (demo) dataDir = ':memory:';
   if (!secret) {
     if (process.env.NODE_ENV === 'production') throw new Error('Set SESSION_SECRET.');
     secret = 'front-desk-development-only';
@@ -66,10 +71,11 @@ export async function createApp({
   const tenancy = createTenancy({
     tenants: directory,
     open: (tenant) => deskSync({ db: dataDir === ':memory:' ? ':memory:' : join(dataDir, `${tenant.id}.db`) }),
-    setup: async ({ tenant, sync, store }) => ({
-      desk: await createDesk({ sync, store, site: tenant.site, now, holdMs }),
-      staff: createStaff({ store, secure, now, ...(staffCost ? { cost: staffCost } : {}) }),
-    }),
+    setup: async ({ tenant, sync, store }) => {
+      const desk = await createDesk({ sync, store, site: tenant.site, now, holdMs });
+      const staff = createStaff({ store, secure, now, ...(staffCost ? { cost: staffCost } : {}) });
+      return { desk, staff: demo ? lockedDemo(staff, await demoOwner(staff)) : staff };
+    },
   });
   const guests = signedCookie({ secret, name: 'guest', secure });
   const zubra = createZubra({ components, cache });
@@ -373,7 +379,7 @@ ${sheet.map((one) => `<h3>${escape(one.name)}</h3>${one.appointments.length ? `<
     if (await pages.handle(req, res, url, null)) return;
     if (path === '/staff') {
       pages.noStore(res);
-      if (!atDesk) return page(res, p, 'Sign in', pages.signIn(url));
+      if (!atDesk) return page(res, p, 'Sign in', (demo ? demoSignIn(escape) : '') + pages.signIn(url));
       return page(res, p, 'Staff', pages.bar(who) + staffPage(p, url));
     }
     send(res, 404, 'Not found');
@@ -427,14 +433,16 @@ ${sheet.map((one) => `<h3>${escape(one.name)}</h3>${one.appointments.length ? `<
     }
     return links;
   }
-  return Object.assign(server, { tenancy, open, business: (id) => tenancy.spaceOf(id) });
+  return Object.assign(server, { tenancy, open, demo, business: (id) => tenancy.spaceOf(id) });
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const port = Number(process.env.PORT ?? 3000);
   const server = await createApp();
   const links = await server.open();
+  if (server.demo) nightly();
   server.listen(port, '0.0.0.0', () => {
+    if (server.demo) console.log('Demo: each business has a demo owner (shown on its sign-in page), and the data resets every night.');
     for (const tenant of tenantsFromEnv() ?? DEFAULT_TENANTS) console.log(`${sites[tenant.site].name}: http://${tenant.hosts[0]}:${port}`);
     for (const { tenant, token } of links) console.log(`Set up the first owner of ${sites[tenant.site].name} (works once, for a day): http://${tenant.hosts[0]}:${port}/staff/accept?token=${token}`);
   });

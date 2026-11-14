@@ -63,13 +63,13 @@ export const sites = {
 
   community: {
     id: 'community',
-    name: 'Bittinger Volunteer Fire Company',
-    town: 'Bittinger, Maryland',
+    name: 'Pine Hollow Volunteer Fire Company',
+    town: 'Pine Hollow, Maryland',
     timeZone: 'America/New_York',
     hours: 'Hall office open Tuesdays, 6 to 8 pm',
-    concept: 'Concept by Potomac Solutions. Bittinger Volunteer Fire Company here is made up; no event or gift is real.',
+    concept: 'Concept by Potomac Solutions. Pine Hollow Volunteer Fire Company here is made up; no event or gift is real.',
     about: 'Neighbours keeping neighbours safe since 1952. Come to a breakfast, learn CPR, or give to the new engine.',
-    notice: 'Burn ban in effect until further notice. Call 911 for any fire.',
+    notice: 'The hall is closed Thanksgiving week. Breakfast is back the Sunday after.',
     colours: { primary: '#7a1f1f', accent: '#e0b03c', background: '#faf7f2', border: '#e2d7c9', muted: '#f1e9dd', mutedForeground: '#6d5f55' },
     modules: { appointments: false, events: true, giving: true },
     // Events start this many days from the first run, so the demo always has some ahead.
