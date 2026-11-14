@@ -5,7 +5,7 @@ For the businesses and groups whose website is mostly a front desk: book an appo
 One server runs several businesses, each at its own web address, each with its own data and its own staff. It starts with two, both made up:
 
 - **Yough Valley Hair Co.** in Oakland, Maryland: a two-chair salon. Appointments with intake questions, and a wedding-party enquiry form.
-- **Bittinger Volunteer Fire Company** in Bittinger, Maryland: an events calendar with sign-ups, a fund for a new engine, and forms to volunteer or book the hall.
+- **Pine Hollow Volunteer Fire Company** in Pine Hollow, Maryland (a made-up town): an events calendar with sign-ups, a fund for a new engine, and forms to volunteer or book the hall.
 
 No appointment, event or gift here is real. Payments are in test mode, and texts and emails aren't sent: the staff page shows each one instead.
 
@@ -50,18 +50,49 @@ Without JavaScript (turn it off in the browser's settings), all of it works the 
 ## Run it
 
 ```sh
-npm install      # needs read access to the private Potomac-Solutions/kit repository
+npm install
 npm start        # both businesses: the salon at localhost:3000, the fire company at 127.0.0.1:3000
 npm test         # needs Chrome or Playwright's Chromium
 ```
 
-Node 22.13 or later. `SESSION_SECRET` is required in production, where cookies are `Secure` (and the staff cookie `__Host-`). `DATA_DIR` says where the database files go, one per business. `TENANTS` is the list of businesses, as JSON: Behind a proxy (Railway, Fly, a load balancer), set `TRUST_PROXIES` to how many add to `X-Forwarded-For` (usually `1`), so a wrong-password lockout falls on the device guessing and not on everyone; left unset, no header is trusted and every sign-in counts as the proxy's address.
+Node 22.13 or later. `SESSION_SECRET` is required in production, where cookies are `Secure` (and the staff cookie `__Host-`). `DATA_DIR` says where the database files go, one per business. `TENANTS` is the list of businesses, as JSON:
 
 ```sh
-TENANTS='[{"id":"yough-valley-hair","site":"desk","hosts":["youghvalleyhair.com"]},{"id":"bittinger-vfc","site":"community","hosts":["bittingervfc.org"]}]'
+TENANTS='[{"id":"yough-valley-hair","site":"desk","hosts":["youghvalleyhair.com"]},{"id":"pine-hollow-vfc","site":"community","hosts":["pinehollowvfc.org"]}]'
 ```
 
-A business's setup link is printed at start until it has an owner; each lasts a day, and a restart prints a fresh one.
+Behind a proxy (Railway, Fly, a load balancer), set `TRUST_PROXIES` to how many add to `X-Forwarded-For` (usually `1`), so a wrong-password lockout falls on the device guessing and not on everyone; left unset, no header is trusted and every sign-in counts as the proxy's address.
+
+A business's setup link is printed at start until it has an owner; each lasts a day, and a restart prints a fresh one. Claim it right after the first deploy: until someone does, anyone who can read the server's log could.
+
+## The public demo
+
+With `DEMO=1` the server is a demo anyone can try, staff side included (`src/demo.js`):
+
+- Each business starts with a demo owner, and its sign-in page shows the login: `demo@example.com`, password `try the front desk`. There are no setup links.
+- Nobody can change the demo account: not its password, its roles or a reset link for it, and nobody can turn it off. Everything else a visitor does lasts until the reset, including people they invite.
+- The data is kept in memory, so a restart is a reset, and nothing needs a volume. Once a night at 4 am New York time the server exits, and Railway's "always" restart policy (`railway.json`) starts it again with fresh data.
+
+## Deploy the demo on Railway
+
+`railway.json` sets the build, the start command, the health check (`/health`) and the restart policy.
+
+1. In Railway, make a service from `Potomac-Solutions/front-desk`, from the `main` branch.
+2. Set the service's variables:
+
+   ```sh
+   NODE_ENV=production
+   SESSION_SECRET=<a long random string: openssl rand -base64 48>
+   DEMO=1
+   TRUST_PROXIES=1
+   TENANTS=[{"id":"yough-valley-hair","site":"desk","hosts":["salon.potomac.solutions"]},{"id":"pine-hollow-vfc","site":"community","hosts":["firehall.potomac.solutions"]}]
+   ```
+
+3. Under **Settings → Networking**, add both custom domains, `salon.potomac.solutions` and `firehall.potomac.solutions`. Railway shows a CNAME target for each.
+4. At the DNS host for `potomac.solutions`, add the two CNAME records Railway gave (`salon` and `firehall`), and any TXT record it asks for to verify them. Railway issues the certificates once the records resolve.
+5. Open each address. Its sign-in page shows the demo login.
+
+For a real business, leave out `DEMO`, set `DATA_DIR` to a mounted volume (the data must outlive a deploy), and claim each setup link from the deploy log straight away.
 
 ## What the tests prove
 
@@ -92,8 +123,16 @@ Two businesses on one server, and their staff (`test/accounts.test.js`):
 1. Each host gets its own business, matched without case; a host nobody answers to is a 404, pages and live data alike.
 2. Each business's first owner sets up from its own setup link, once; a link means nothing at the other business; link pages aren't cached and send no `Referer`. A session at one business is nobody at the other, and the same email can be two different people.
 3. An owner invites staff (the link is shown on the page, not put in its address). Staff see the day sheet but can't open or use the owner's pages. Turning someone off ends their open session at once. The last owner can't step down. A reset link sets a new password, and the old one stops working.
-4. Five wrong passwords lock an email, even for the right password, and only at that business. Changing your password signs out your other devices. Signing out ends the session. Another site can't post a sign-in.
+4. Five wrong passwords lock that device's address out of the email, even with the right password, and only at that business; behind a proxy, the owner still signs in from her own address. Changing your password signs out your other devices. Signing out ends the session. Another site can't post a sign-in.
 5. Each business's live data is its own, and a page that asks for staff accounts, sessions or tokens gets none: no hashes, emails or names.
+
+The demo (`test/demo.test.js`):
+
+1. Every business starts with the demo owner and prints no setup link; the sign-in page shows the login, and it works at both.
+2. Nobody can change the demo account (password, roles, reset link, turning it off, ending its sessions), not even an owner a visitor invited; other accounts still can be.
+3. The data lives in memory: a new server starts with only the demo owner.
+4. The nightly reset exits once, at 4 am New York time, and never in the first hour after a restart.
+5. Without `DEMO`, there's no demo owner and no demo login on the page.
 
 Every behaviour was broken on purpose once to check a test fails (55 of 57 caught, 12 of them the staff and two-business wiring). The two that can't be: a page may write nothing because every collection is the server's, and a booking's later pieces are checked before holding even though the kit's `hold` already refuses the whole run if any piece is taken. Both checks stay as safety belts.
 
@@ -101,6 +140,6 @@ Every behaviour was broken on purpose once to check a test fails (55 of 57 caugh
 
 - The owner's admin: services, staff hours, events, the fund and every form are data in `src/site.js` today.
 - Real texts and email (a sender behind the kit's `notify`), so an invite or reset link is sent rather than copied; reminders the day before; a real payment provider.
-- Two-factor sign-in, and a rate limit per address in front of sign-in (the kit's lockout counts per email).
+- Two-factor sign-in, and a rate limit in front of sign-in (the kit's lockout counts failures, not requests).
 - Which staff member is which person on the rota: an account isn't yet tied to Jess or Marco's chair.
 - Recurring events, a waiting list when an event is full, and deposits for appointments.
