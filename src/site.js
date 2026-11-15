@@ -1,6 +1,7 @@
 // The two sites Front Desk starts with: one office that takes appointments, one community group
 // with a calendar and a fund. A business switches on the modules it needs; the code is the same.
-// Everything here is data the owner will edit from an admin page (a later step).
+// The owner edits the words and prices from the admin's settings; `cents` is a service's typical
+// price, for the reports (the salon is paid in the chair, not online).
 //
 // Made-up businesses in real towns, so the demo reads like the trade without being anyone's.
 //
@@ -36,20 +37,21 @@ export const sites = {
       { id: 'marco', name: 'Marco', days: [3, 4, 5, 6], opens: '10:00', closes: '18:00', does: ['cut', 'beard', 'kids'] },
     ],
     services: [
-      { id: 'cut', name: 'Cut and style', minutes: 45, price: 'From $38', about: 'A wash, a cut and a blow-dry.', intake: [{ name: 'length', label: 'How much off?', type: 'select', options: ['A trim', 'A few inches', 'Something new'], required: true }] },
+      { id: 'cut', name: 'Cut and style', minutes: 45, price: 'From $38', cents: 3800, about: 'A wash, a cut and a blow-dry.', intake: [{ name: 'length', label: 'How much off?', type: 'select', options: ['A trim', 'A few inches', 'Something new'], required: true }] },
       {
         id: 'colour',
         name: 'Colour',
         minutes: 90,
         price: 'From $85',
+        cents: 8500,
         about: 'All-over colour or a refresh of the roots.',
         intake: [
           { name: 'patch', label: 'Have you had a patch test with us in the last six months?', type: 'select', options: ['Yes', 'No'], required: true, hint: 'If not, we’ll do one at the start; it takes a minute.' },
           { name: 'last', label: 'When did you last colour your hair?', type: 'select', options: ['Never', 'In the last two months', 'Longer ago'], required: true },
         ],
       },
-      { id: 'beard', name: 'Beard trim', minutes: 30, price: '$20', about: 'Shaped, lined up and hot-towelled.', intake: [] },
-      { id: 'kids', name: 'Kids’ cut (under 12)', minutes: 30, price: '$22', about: 'With a lollipop at the end.', intake: [{ name: 'child', label: 'Child’s first name', type: 'text', required: true }] },
+      { id: 'beard', name: 'Beard trim', minutes: 30, price: '$20', cents: 2000, about: 'Shaped, lined up and hot-towelled.', intake: [] },
+      { id: 'kids', name: 'Kids’ cut (under 12)', minutes: 30, price: '$22', cents: 2200, about: 'With a lollipop at the end.', intake: [{ name: 'child', label: 'Child’s first name', type: 'text', required: true }] },
     ],
     forms: [
       {
