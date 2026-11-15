@@ -11,14 +11,25 @@ No appointment, event or gift here is real. Payments are in test mode, and texts
 
 ## Try it
 
-`npm install`, then `npm start`. One server runs both businesses:
+`npm install`, then `npm run demo`: it fills both businesses with made-up history and starts them. The salon gets four months of appointments and two weeks ahead; the fire company gets past events with sign-ups, a year of online gifts and sign-ups for what's ahead. It prints the sign-ins, for this machine only:
 
-- the salon at http://localhost:3000 (or http://salon.localhost:3000),
-- the fire company at http://127.0.0.1:3000 (or http://firehall.localhost:3000).
+| Business | Address | Owner | Staff |
+| --- | --- | --- | --- |
+| Yough Valley Hair Co. | http://localhost:3000 | `owner@example.com` / `yough-owner-demo` | `jess@example.com` / `yough-staff-demo` |
+| Pine Hollow VFC | http://127.0.0.1:3000 | `owner@example.com` / `pine-hollow-owner-demo` | `office@example.com` / `pine-hollow-staff-demo` |
 
-The first time, nobody has an account, so the server prints a **setup link** for each business. Open it to make that business's owner: your email, name and a password. Then **Staff** in the footer is the sign-in page, and an owner's **People** page invites the rest of the staff (an invite is a link to send them), resets passwords and turns people off.
+A customer account on both: `riley@example.com` / `front-desk-guest-demo`.
 
-Two browser windows side by side (one private, so it's another person) show the live parts best.
+`npm start` alone keeps what's there; with no data it prints a **setup link** for each business's first owner instead. `npm run seed` fills empty businesses, and `npm run seed -- --fresh` starts over.
+
+**Customer accounts** (`/account`, both businesses): sign up, and what you've booked, signed up for or given from this browser joins the account; signed in on another device it's all there, past and cancelled included. **Forgot your password?** sends a one-time link, which lands in the owner's **Outbox** (nothing is really sent).
+
+**The admin** (`/admin`, staff sign-in), with only the parts a business switched on:
+- **Overview**: today's appointments, how booked the chairs are this week, takings at typical prices and cancellations (the salon); events ahead, places taken and online giving against the month before (the fire company); the inbox, new accounts, a chart of the last 30 days, what's next and what the staff did.
+- **Appointments**: search, filter by when, status, who and service; cancel (the customer is texted); download as CSV. **Events**: ahead and past with places taken, each with its sign-up list (CSV); owners add events. **Giving**: every online gift, as CSV. **Inbox**: forms to mark handled. **Customers**: accounts and what each has booked or given.
+- For owners: **Reports** by day, week or month (appointments and takings by service, chair and start time; or giving by period and gift size, and how full each event was), with CSV; **Settings** for the words and prices people see; **Staff**; and the **Outbox**.
+
+The day sheet (`/staff`) is still where the desk works through today.
 
 **The salon**
 
@@ -44,7 +55,10 @@ Without JavaScript (turn it off in the browser's settings), all of it works the 
 | `@zubra/server` | Renders every page before any JavaScript runs |
 | `@zubra/sync` | Each business's log (one SQLite file each). Which pieces of each chair are taken, each event's places left and the fund's total are documents only the server writes; pages follow them live, and never read who booked, signed up or gave |
 | `src/site.js` | The two sites as data: modules switched on, staff and their hours, services with their questions, events, the fund, and every form's fields |
-| `src/desk.js` | The deciding: free times, holds and bookings, sign-ups, gifts, forms against their fields, the inbox |
+| `src/desk.js` | The deciding: free times, holds and bookings, sign-ups, gifts, forms against their fields, the inbox, what follows a customer account, the owner's settings and the staff activity |
+| `kit/customers`, `kit/reports` | Customer accounts; the numbers by day, week or month, and CSV |
+| `src/account.js`, `src/admin.js`, `src/chart.js` | The account pages; the admin; charts drawn on the server as SVG, with a table under each |
+| `bin/seed.js` | The demo data |
 | `free-times`, `places-left`, `fund-progress` | The live parts |
 
 ## Run it
@@ -134,11 +148,24 @@ The demo (`test/demo.test.js`):
 4. The nightly reset exits once, at 4 am New York time, and never in the first hour after a restart.
 5. Without `DEMO`, there's no demo owner and no demo login on the page.
 
+The admin, customer accounts and reports (`test/admin.test.js`, over plain HTTP):
+
+1. Each landing page leads with what the business does, and shows a guest no admin link.
+2. A salon customer's sign-up takes in the appointment booked from that browser; signed in on another device it follows and can be cancelled there; signed out, it doesn't.
+3. A fire company account keeps its sign-ups and gifts.
+4. A forgotten password gets the same page whether or not the account exists; the emailed link works once.
+5. The admin needs a staff sign-in; staff get no reports, settings or outbox (403) and their settings posts change nothing; each business shows only its own modules (404 for the rest).
+6. Staff search for an appointment and cancel it from the admin; the customer is texted and it shows in the activity.
+7. An owner's new words and prices show on the site; a bad price is refused.
+8. An owner adds an event, people sign up for it, and its list downloads as CSV with a name starting `=` opened as text.
+9. The salon's report downloads a row per day; the fire company's giving total matches its gifts and its CSV adds up to it.
+10. An owner turns a customer off and they're signed out; staff can't turn them back on.
+
 Every behaviour was broken on purpose once to check a test fails (55 of 57 caught, 12 of them the staff and two-business wiring). The two that can't be: a page may write nothing because every collection is the server's, and a booking's later pieces are checked before holding even though the kit's `hold` already refuses the whole run if any piece is taken. Both checks stay as safety belts.
 
 ## Not yet
 
-- The owner's admin: services, staff hours, events, the fund and every form are data in `src/site.js` today.
+- More of the owner's admin: adding services, staff hours, the fund's goal and the forms' fields are still data in `src/site.js` (words, prices and new events are editable).
 - Real texts and email (a sender behind the kit's `notify`), so an invite or reset link is sent rather than copied; reminders the day before; a real payment provider.
 - Two-factor sign-in, and a rate limit in front of sign-in (the kit's lockout counts failures, not requests).
 - Which staff member is which person on the rota: an account isn't yet tied to Jess or Marco's chair.
