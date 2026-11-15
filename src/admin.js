@@ -7,7 +7,7 @@ import { series, totals, breakdown, csv } from '@potomac-solutions/kit/reports';
 import { escape } from './layout.js';
 import { dateLabel, timeLabel } from './desk.js';
 import { money } from './account.js';
-import { barChart, rankBars } from './chart.js';
+import { barChart, rankBars } from '@potomac-solutions/kit/charts';
 
 const DAY = 86_400_000;
 const PAGE = 25;

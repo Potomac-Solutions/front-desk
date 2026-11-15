@@ -1,4 +1,6 @@
 // The page around the components: the site's frame, its colours, and the connection to the log.
+import { CHART_CSS } from '@potomac-solutions/kit/charts';
+
 export const escape = (value) => String(value ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 
 const STYLE = `
@@ -85,20 +87,6 @@ const STYLE = `
   .muted { color: var(--muted-foreground); }
   .num { text-align: right; font-variant-numeric: tabular-nums; }
   .pager { display: flex; gap: 1rem; align-items: center; }
-  .chart { margin: 0; display: grid; gap: 0.5rem; }
-  .chart svg { width: 100%; height: auto; }
-  .chart .bar { fill: var(--primary); }
-  .chart .col:hover .bar { opacity: 0.8; }
-  .chart .hit { fill: transparent; }
-  .chart .grid { stroke: var(--border); stroke-dasharray: 3 3; }
-  .chart .axis { stroke: var(--muted-foreground); }
-  .chart .tick { fill: var(--muted-foreground); font-size: 11px; }
-  .chart-table summary { cursor: pointer; color: var(--muted-foreground); font-size: 0.9rem; }
-  .ranks { display: grid; gap: 0.5rem; margin: 0; padding: 0 !important; list-style: none; }
-  .ranks li { display: grid; grid-template-columns: 10rem 1fr 6rem; gap: 0.75rem; align-items: center; }
-  .rank-track { height: 0.75rem; border-radius: 4px; background: var(--muted); overflow: hidden; }
-  .rank-bar { display: block; height: 100%; border-radius: 0 4px 4px 0; background: var(--primary); }
-  .rank-value { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
   .month { margin: 0.5rem 0 0; font-size: 1rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted-foreground); }`;
 
 /**
@@ -122,7 +110,7 @@ export function layout({ title, site, body, nav = {}, wide = false, here = '' })
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex, nofollow">
   <title>${escape(title)} · ${escape(site.name)}</title>
-  <style>:root { --background: ${c.background}; --border: ${c.border}; --input: ${c.border}; --muted: ${c.muted}; --muted-foreground: ${c.mutedForeground}; --primary: ${c.primary}; --ring: ${c.primary}; --accent: ${c.accent}; }${STYLE}</style>
+  <style>:root { --background: ${c.background}; --border: ${c.border}; --input: ${c.border}; --muted: ${c.muted}; --muted-foreground: ${c.mutedForeground}; --primary: ${c.primary}; --ring: ${c.primary}; --accent: ${c.accent}; }${STYLE}${CHART_CSS}</style>
 </head>
 <body>
   <p class="concept">${escape(site.concept)}</p>

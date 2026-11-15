@@ -57,7 +57,7 @@ Without JavaScript (turn it off in the browser's settings), all of it works the 
 | `src/site.js` | The two sites as data: modules switched on, staff and their hours, services with their questions, events, the fund, and every form's fields |
 | `src/desk.js` | The deciding: free times, holds and bookings, sign-ups, gifts, forms against their fields, the inbox, what follows a customer account, the owner's settings and the staff activity |
 | `kit/customers`, `kit/reports` | Customer accounts; the numbers by day, week or month, and CSV |
-| `src/account.js`, `src/admin.js`, `src/chart.js` | The account pages; the admin; charts drawn on the server as SVG, with a table under each |
+| `src/account.js`, `src/admin.js`, `kit/charts` | The account pages; the admin; charts drawn on the server as SVG, with a table under each |
 | `bin/seed.js` | The demo data |
 | `free-times`, `places-left`, `fund-progress` | The live parts |
 
