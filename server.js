@@ -17,7 +17,10 @@ import { fileURLToPath } from 'node:url';
 import { createZubra } from '@zubra/server';
 import { signedCookie } from '@potomac-solutions/kit/auth';
 import { createStaff } from '@potomac-solutions/kit/staff';
-import { staffPages } from '@potomac-solutions/kit/staff/pages';
+import { staffPages, clientAddress } from '@potomac-solutions/kit/staff/pages';
+import { createCustomers } from '@potomac-solutions/kit/customers';
+import * as accountPages from './src/account.js';
+import { createAdmin } from './src/admin.js';
 import { demoOwner, lockedDemo, demoSignIn, nightly } from './src/demo.js';
 import { createNotices } from '@potomac-solutions/kit/notice';
 import { createTenants } from '@potomac-solutions/kit/tenant';
@@ -74,14 +77,16 @@ export async function createApp({
     setup: async ({ tenant, sync, store }) => {
       const desk = await createDesk({ sync, store, site: tenant.site, now, holdMs });
       const staff = createStaff({ store, secure, now, ...(staffCost ? { cost: staffCost } : {}) });
-      return { desk, staff: demo ? lockedDemo(staff, await demoOwner(staff)) : staff };
+      // Customers who make an account (kit/customers), in the business's own log.
+      const customers = createCustomers({ store, secure, now, ...(staffCost ? { cost: staffCost } : {}) });
+      return { desk, customers, staff: demo ? lockedDemo(staff, await demoOwner(staff)) : staff };
     },
   });
   const guests = signedCookie({ secret, name: 'guest', secure });
   const zubra = createZubra({ components, cache });
 
   /** One business's pages and routes. */
-  function business({ desk, staff }) {
+  function business({ desk, staff, customers }) {
   const { on } = desk;
   const site = desk.site;
   const clockAt = (at) => new Date(at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: site.timeZone }).toLowerCase();
@@ -91,7 +96,10 @@ export async function createApp({
   // its own words in a page's alert.
   const notices = createNotices({ secret });
   const back = (res, location) => (res.writeHead(303, { location: notices.sign(location) }), res.end());
-  const page = (res, p, title, body) => send(res, 200, p.finish(layout({ title, site, body })));
+  const page = (res, p, title, body, options = {}) => send(res, options.status ?? 200, p.finish(layout({ title, site, body, ...options })));
+  const admin = createAdmin({ desk, customers, now });
+  const downloadCsv = (res, name, text) => (res.writeHead(200, { 'content-type': 'text/csv; charset=utf-8', 'content-disposition': `attachment; filename="${name}"`, 'cache-control': 'no-store' }), res.end(text));
+  const origin = (req) => process.env.PUBLIC_URL || `http://${req.headers.host ?? 'localhost'}`;
   const note = (url) => {
     const problem = notices.read(url).problem;
     const done = notices.read(url).done;
@@ -130,20 +138,22 @@ export async function createApp({
   const fundBar = (p, fund) => p.render('fund-progress', { fund: fund.id, goal: fund.goal, raisedNow: fund.raised, giftsNow: fund.gifts });
 
   // ---- The guest's pages ----------------------------------------------------------------------------
-  function home(p, url, guest) {
+  function home(p, url, guest, account) {
     const mine = desk.appointmentsFor(guest);
     const signed = on.events ? desk.rsvpsFor(guest) : [];
     const fund = desk.fund();
-    return `<section><h1>${escape(site.name)}</h1><p class="lede">${escape(site.about)}</p></section>
+    const first = on.appointments ? ['#book', 'Book an appointment'] : on.events ? ['/events', 'See what’s on'] : ['/forms/' + site.forms[0].id, site.forms[0].title];
+    return `<section class="hero"><h1>${escape(site.name)}</h1><p class="lede">${escape(site.about)}</p><div class="actions"><a class="go" href="${first[0]}">${escape(first[1])}</a>${on.giving ? '<a class="button light" href="/give">Give</a>' : ''}${account ? '<a class="button light" href="/account">Your account</a>' : '<a class="button light" href="/account/sign-up">Make an account</a>'}</div></section>
 ${note(url)}
 ${site.notice ? `<p class="bulletin">${escape(site.notice)}</p>` : ''}
 ${mine.length ? `<section class="panel"><h2>Your appointments</h2><ul>${mine.map((appt) => `<li><a href="/a/${appt.key}">${escape(appt.when)}</a> · ${escape(appt.what)}</li>`).join('')}</ul></section>` : ''}
 ${signed.length ? `<section class="panel"><h2>You’re signed up</h2><ul>${signed.map((one) => `<li><a href="/r/${one.key}">${escape(one.title)}</a> · ${one.count} ${one.count === 1 ? 'place' : 'places'}</li>`).join('')}</ul></section>` : ''}
-${on.appointments ? `<section><h2>Book an appointment</h2></section><ul class="cards">${site.services.map((svc) => `<li class="card"><h3>${escape(svc.name)}</h3><p class="meta">${svc.minutes} minutes · ${escape(svc.price)}</p><p>${escape(svc.about)}</p><a class="go" href="/book/${svc.id}">Book</a></li>`).join('')}</ul>` : ''}
+${on.appointments ? `<section id="book"><h2>Book an appointment</h2></section><ul class="cards">${site.services.map((svc) => `<li class="card"><h3>${escape(svc.name)}</h3><p class="meta">${svc.minutes} minutes · ${escape(svc.price)}</p><p>${escape(svc.about)}</p><a class="go" href="/book/${svc.id}">Book</a></li>`).join('')}</ul>` : ''}
 ${on.events ? `<section><h2>Coming up</h2></section><ul class="cards">${desk.events().slice(0, 3).map((event) => eventCard(p, event)).join('')}</ul><p><a href="/events">The whole calendar</a></p>` : ''}
 ${fund ? `<section class="panel"><h2>${escape(fund.title)}</h2><p>${escape(site.fund.about)}</p>${fundBar(p, fund)}<a class="go" href="/give">Give</a></section>` : ''}
 <section><h2>Get in touch</h2></section>
-<ul class="cards">${site.forms.map((form) => `<li class="card"><h3>${escape(form.title)}</h3><p>${escape(form.intro)}</p><a class="go" href="/forms/${form.id}">Open the form</a></li>`).join('')}</ul>`;
+<ul class="cards">${site.forms.map((form) => `<li class="card"><h3>${escape(form.title)}</h3><p>${escape(form.intro)}</p><a class="go" href="/forms/${form.id}">Open the form</a></li>`).join('')}</ul>
+<section class="panel"><h2>Visit</h2><dl><dt>Where</dt><dd>${escape(site.town)}</dd><dt>Hours</dt><dd>${escape(site.hours)}</dd>${on.appointments ? `<dt>Who</dt><dd>${site.staff.map((one) => escape(one.name)).join(' and ')}</dd>` : ''}</dl></section>`;
   }
 
   function bookPage(p, url, guest, svc) {
@@ -283,9 +293,16 @@ ${sheet.map((one) => `<h3>${escape(one.name)}</h3>${one.appointments.length ? `<
   const pages = staffPages({ staff, notices, proxies, home: '/staff', business: site.name, secure, render: (res, title, body) => page(res, zubra.page(), title, body) });
 
   /** Answer one request for this business. */
-  return async function handle(req, res, url, guest) {
+  return async function handle(req, res, url, browserGuest) {
     const who = staff.session(req);
     const atDesk = staff.can(who, 'staff');
+    const owner = staff.can(who, 'owner');
+    // Signed in, a guest's own records are their browser's and their account's.
+    const account = customers.session(req);
+    const guest = browserGuest && { ...browserGuest, customer: account?.customer };
+    const nav = { customer: account, staff: atDesk };
+    const show = (p, title, body, options = {}) => page(res, p, title, body, { nav, ...options });
+    if (url.pathname.startsWith('/account') || url.pathname.startsWith('/admin')) res.setHeader('cache-control', 'no-store');
     if (req.method === 'POST') {
       // Every form is ours: another site's post is refused (the cookies are SameSite=Lax too).
       if (req.headers['sec-fetch-site'] === 'cross-site') return send(res, 403, 'Forbidden');
@@ -330,12 +347,104 @@ ${sheet.map((one) => `<h3>${escape(one.name)}</h3>${one.appointments.length ? `<
         const done = await desk.send(sending[1], form);
         return back(res, done.ok ? withDone(`/forms/${sending[1]}`, 'Sent. We’ll be in touch.') : withProblem(`/forms/${sending[1]}`, done));
       }
+      // A customer's account.
+      if (path.startsWith('/account/')) {
+        const p = zubra.page();
+        const problem = (words) => `<p class="notice" role="alert">${escape(words)}</p>`;
+        if (path === '/account/sign-up') {
+          const made = await customers.signUp({ email: form.get('email'), name: form.get('name'), password: form.get('password') });
+          if (made.error) return show(p, 'Make an account', accountPages.signUp({ problem: problem(made.error), form }), { status: 422 });
+          await desk.claim(guest, made.customer);
+          res.setHeader('set-cookie', made.cookie);
+          return back(res, withDone('/account', 'Welcome. Your account is ready.'));
+        }
+        if (path === '/account/sign-in') {
+          const signed = await customers.signIn(form.get('email'), form.get('password'), { client: clientAddress(req, { proxies }) });
+          if (signed.error) return show(p, 'Sign in', accountPages.signIn({ problem: problem(signed.error === 'locked' ? 'Too many tries. Wait 15 minutes, or reset your password.' : 'That email and password don’t match.'), email: String(form.get('email') ?? '') }), { status: 401 });
+          await desk.claim(guest, signed.customer);
+          res.setHeader('set-cookie', signed.cookie);
+          return back(res, '/account');
+        }
+        if (path === '/account/sign-out') {
+          res.setHeader('set-cookie', (await customers.signOut(req)).cookie);
+          return back(res, '/');
+        }
+        if (path === '/account/forgot') {
+          const email = String(form.get('email') ?? '').trim().toLowerCase();
+          const raw = await customers.resetToken(email);
+          const one = raw && customers.list().find((c) => c.email === email);
+          if (one) {
+            const link = `${origin(req)}/account/reset?token=${raw}`;
+            await desk.email(one.email, `Reset your ${site.name} password`, `Hi ${one.name},\n\nThis link sets a new password. It works once, for an hour:\n${link}\n\nIf it wasn’t you, ignore this email.`);
+            if (!secure) console.log(`Password reset for ${one.email}: ${link}`);
+          }
+          return show(p, 'Reset your password', accountPages.forgot({ sent: true }));
+        }
+        if (path === '/account/reset') {
+          const raw = String(form.get('token') ?? '');
+          const reset = await customers.reset(raw, form.get('password'));
+          if (reset.error) return show(p, 'Choose a new password', accountPages.reset({ token: raw, problem: problem(reset.error), works: customers.peek(raw) }), { status: 422 });
+          res.setHeader('set-cookie', reset.cookie);
+          return back(res, withDone('/account', 'Your new password is saved.'));
+        }
+        if (path === '/account/profile') {
+          if (!account) return back(res, '/account/sign-in');
+          const renamed = await customers.rename(account.customer, form.get('name'));
+          return back(res, renamed.ok ? withDone('/account', 'Saved.') : withProblem('/account', renamed));
+        }
+        return send(res, 404, 'Not found');
+      }
+      // The admin's changes. Staff cancel and handle; owners change customers, settings and events.
+      if (path.startsWith('/admin/')) {
+        if (!atDesk) return back(res, '/admin');
+        const key = String(form.get('key') ?? '');
+        if (on.appointments && path === '/admin/appointments/cancel') {
+          const done = await desk.cancel(null, key, { staff: true });
+          if (done.ok) await desk.audit(who, `cancelled ${done.appt.name}’s ${done.appt.what}, ${done.appt.when}`, key);
+          return back(res, done.ok ? withDone('/admin/appointments', `${done.appt.name}’s appointment is cancelled; we’ve texted them.`) : withProblem('/admin/appointments', done));
+        }
+        if (path === '/admin/inbox/handled') {
+          const done = await desk.handled(key);
+          if (done.ok) await desk.audit(who, 'marked a form handled', key);
+          return back(res, done.ok ? withDone('/admin/inbox', 'Marked handled.') : withProblem('/admin/inbox', done));
+        }
+        if (!owner) return back(res, '/admin');
+        const customerAction = path.match(/^\/admin\/customers\/(c[a-z0-9]+)\/(disabled|reset)$/);
+        const one = customerAction && customers.get(customerAction[1]);
+        if (one && customerAction[2] === 'disabled') {
+          const off = form.get('disabled') === 'yes';
+          await customers.setDisabled(one.customer, off);
+          await desk.audit(who, `${off ? 'turned off' : 'turned back on'} ${one.name}’s account`, one.customer);
+          return back(res, withDone(`/admin/customers/${one.customer}`, off ? 'Turned off and signed out everywhere.' : 'Turned back on.'));
+        }
+        if (one) {
+          const raw = await customers.resetToken(one.email);
+          if (!raw) return back(res, withProblem(`/admin/customers/${one.customer}`, { error: 'That account is turned off.' }));
+          await desk.email(one.email, `Reset your ${site.name} password`, `Hi ${one.name},\n\nThis link sets a new password. It works once, for an hour:\n${origin(req)}/account/reset?token=${raw}`);
+          await desk.audit(who, `emailed ${one.name} a reset link`, one.customer);
+          return back(res, withDone(`/admin/customers/${one.customer}`, 'Sent. It’s in the outbox.'));
+        }
+        if (path === '/admin/settings') {
+          const saved = await desk.setSite(form);
+          if (saved.error) return back(res, withProblem('/admin/settings', saved));
+          await desk.audit(who, 'changed the site’s words and prices');
+          return back(res, withDone('/admin/settings', 'Saved. The site shows it now.'));
+        }
+        if (on.events && path === '/admin/events/new') {
+          const added = await desk.addEvent(form);
+          if (added.error) return back(res, withProblem('/admin/events', added));
+          await desk.audit(who, `added ${added.event.title} to the calendar`, added.key);
+          return back(res, withDone('/admin/events', `Added: ${added.event.title}.`));
+        }
+        return send(res, 404, 'Not found');
+      }
       if (await pages.handle(req, res, url, form)) return;
       if (path.startsWith('/staff/')) {
         if (!atDesk) return back(res, '/staff');
         const key = String(form.get('key') ?? '');
         if (on.appointments && path === '/staff/cancel') {
           const done = await desk.cancel(null, key, { staff: true });
+          if (done.ok) await desk.audit(who, `cancelled ${done.appt.name}’s ${done.appt.what}, ${done.appt.when}`, key);
           return back(res, done.ok ? withDone(`/staff?day=${done.appt.date}`, `${done.appt.name}’s appointment is cancelled; we’ve texted them.`) : withProblem('/staff', done));
         }
         if (path === '/staff/handled') {
@@ -349,38 +458,77 @@ ${sheet.map((one) => `<h3>${escape(one.name)}</h3>${one.appointments.length ? `<
 
     const p = zubra.page();
     const path = url.pathname;
-    if (path === '/') return page(res, p, 'Home', home(p, url, guest));
+    if (path === '/') return show(p, 'Home', home(p, url, guest, account), { here: '/' });
+
+    // A customer's pages.
+    if (path === '/account') return account ? show(p, 'Your account', accountPages.account({ desk, guest, customer: account, said: note(url) }), { here: '/account' }) : back(res, '/account/sign-in');
+    if (path === '/account/sign-in') return account ? back(res, '/account') : show(p, 'Sign in', accountPages.signIn({ problem: note(url) }), { here: '/account/sign-in' });
+    if (path === '/account/sign-up') return account ? back(res, '/account') : show(p, 'Make an account', accountPages.signUp());
+    if (path === '/account/forgot') return show(p, 'Reset your password', accountPages.forgot());
+    if (path === '/account/reset') {
+      const raw = url.searchParams.get('token') ?? '';
+      return show(p, 'Choose a new password', accountPages.reset({ token: raw, works: customers.peek(raw) }));
+    }
+
+    // The admin: staff only; reports, settings and the outbox for owners.
+    if (path === '/admin' || path.startsWith('/admin/')) {
+      if (!atDesk) return show(p, 'Sign in', (demo ? demoSignIn(escape) : '') + pages.signIn(url));
+      const bar = pages.bar(who);
+      const said = note(url);
+      const wide = { wide: true, here: '/admin' };
+      if (path === '/admin') return show(p, 'Overview', admin.dashboard({ who, owner, bar }), wide);
+      if (on.appointments && path === '/admin/appointments') return show(p, 'Appointments', said + admin.appointments({ url, owner, bar }), wide);
+      if (on.appointments && path === '/admin/appointments.csv') return downloadCsv(res, 'appointments.csv', admin.appointmentsCsv(url));
+      if (on.events && path === '/admin/events') return show(p, 'Events', admin.events({ owner, bar, said }), wide);
+      const oneEvent = on.events && path.match(/^\/admin\/events\/(e[a-z0-9]+)(\.csv)?$/);
+      const event = oneEvent && desk.event(oneEvent[1]);
+      if (event) return oneEvent[2] ? downloadCsv(res, 'sign-ups.csv', admin.eventCsv(event)) : show(p, event.title, admin.event({ event, owner, bar }), wide);
+      if (on.giving && path === '/admin/gifts') return show(p, 'Giving', admin.gifts({ url, owner, bar }), wide);
+      if (on.giving && path === '/admin/gifts.csv') return downloadCsv(res, 'gifts.csv', admin.giftsCsv());
+      if (path === '/admin/inbox') return show(p, 'Inbox', admin.inbox({ owner, bar, said }), wide);
+      if (path === '/admin/customers') return show(p, 'Customers', admin.customers({ url, owner, bar }), wide);
+      if (path === '/admin/customers.csv') return downloadCsv(res, 'customers.csv', admin.customersCsv());
+      const oneCustomer = path.match(/^\/admin\/customers\/(c[a-z0-9]+)$/);
+      const one = oneCustomer && customers.get(oneCustomer[1]);
+      if (one) return show(p, one.name, admin.customer({ one, owner, bar, said }), wide);
+      if (['/admin/reports', '/admin/reports.csv', '/admin/settings', '/admin/outbox'].includes(path) && !owner) return show(p, 'Owners only', '<section><h1>Owners only</h1><p class="lede">Ask an owner to see this page.</p><p><a href="/admin">Back to the overview</a></p></section>', { status: 403 });
+      if (path === '/admin/reports') return show(p, 'Reports', admin.reports({ url, owner, bar }), wide);
+      if (path === '/admin/reports.csv') return downloadCsv(res, 'report.csv', admin.reportCsv(url));
+      if (path === '/admin/settings') return show(p, 'Settings', admin.settings({ owner, bar, said }), wide);
+      if (path === '/admin/outbox') return show(p, 'Outbox', admin.outbox({ owner, bar }), wide);
+      return send(res, 404, 'Not found');
+    }
     if (on.appointments) {
       if (path === '/book/details') {
         const holding = desk.pending(guest);
         if (!holding) return back(res, withProblem('/', { error: 'Choose a time first.' }));
-        return page(res, p, 'Your details', detailsPage(p, url, holding));
+        return show(p, 'Your details', detailsPage(p, url, holding));
       }
       const booking = path.match(/^\/book\/([a-z-]+)$/);
       const svc = booking && desk.service(booking[1]);
-      if (svc) return page(res, p, `Book ${svc.name}`, bookPage(p, url, guest, svc));
+      if (svc) return show(p, `Book ${svc.name}`, bookPage(p, url, guest, svc));
       const showing = path.match(/^\/a\/(a[a-z0-9]+)$/);
       const appt = showing && desk.appointment(guest, showing[1]);
-      if (appt) return page(res, p, 'Your appointment', appointmentPage(url, appt));
+      if (appt) return show(p, 'Your appointment', appointmentPage(url, appt));
     }
     if (on.events) {
-      if (path === '/events') return page(res, p, 'Calendar', calendarPage(p, url));
+      if (path === '/events') return show(p, 'Calendar', calendarPage(p, url));
       const showing = path.match(/^\/events\/(e[a-z0-9]+)$/);
       const event = showing && desk.event(showing[1]);
-      if (event) return page(res, p, event.title, eventPage(p, url, guest, event));
+      if (event) return show(p, event.title, eventPage(p, url, guest, event));
       const mine = path.match(/^\/r\/(r[a-z0-9]+)$/);
       const rsvp = mine && desk.rsvp(guest, mine[1]);
-      if (rsvp) return page(res, p, 'Your sign-up', rsvpPage(p, url, rsvp));
+      if (rsvp) return show(p, 'Your sign-up', rsvpPage(p, url, rsvp));
     }
-    if (on.giving && path === '/give') return page(res, p, 'Give', givePage(p, url));
+    if (on.giving && path === '/give') return show(p, 'Give', givePage(p, url));
     const showing = path.match(/^\/forms\/([a-z-]+)$/);
     const form = showing && desk.form(showing[1]);
-    if (form) return page(res, p, form.title, formPage(url, form));
+    if (form) return show(p, form.title, formPage(url, form));
     if (await pages.handle(req, res, url, null)) return;
     if (path === '/staff') {
       pages.noStore(res);
-      if (!atDesk) return page(res, p, 'Sign in', (demo ? demoSignIn(escape) : '') + pages.signIn(url));
-      return page(res, p, 'Staff', pages.bar(who) + staffPage(p, url));
+      if (!atDesk) return show(p, 'Sign in', (demo ? demoSignIn(escape) : '') + pages.signIn(url));
+      return show(p, 'Staff', pages.bar(who) + staffPage(p, url));
     }
     send(res, 404, 'Not found');
   };

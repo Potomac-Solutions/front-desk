@@ -17,6 +17,12 @@
 //   gifts/<key>                       a gift (kit pay, test mode)
 //   inbox/<key>                       a form someone sent, for the staff
 //   messages/<key>                    every text or email sent (the concept keeps them here)
+//   settings/site                     what the owner changed from the admin pages
+//   audit/<key>                       who on the staff did what, and when
+//   customers, customer-sessions, customer-tokens   customer accounts (kit customers)
+//
+// A guest's own records carry `owner` (their browser) and, signed in, `customer` (their account):
+// either one makes them theirs.
 import { createSyncServer } from '@zubra/sync/server';
 import { sqliteLog } from '@zubra/sync/sqlite';
 import { syncStore, serverOnly, SERVER_ONLY } from '@potomac-solutions/kit/store';
@@ -91,7 +97,7 @@ export async function deskSync({ db = ':memory:' } = {}) {
   return createSyncServer({
     log: await sqliteLog(db),
     authorize: serverOnly(
-      [...SERVER_ONLY, 'slots', 'slot-holds', 'busy', 'pending', 'appointments', 'events', 'places', 'place-holds', 'rsvps', 'funds', 'gifts', 'inbox', 'messages'],
+      [...SERVER_ONLY, 'slots', 'slot-holds', 'busy', 'pending', 'appointments', 'events', 'places', 'place-holds', 'rsvps', 'funds', 'gifts', 'inbox', 'messages', 'settings', 'audit'],
       ({ kind }) => kind === 'read',
     ),
     scope: () => ({ busy: true, events: true, funds: true }),
@@ -103,8 +109,10 @@ export async function deskSync({ db = ':memory:' } = {}) {
  * or a log of its own at `db`.
  */
 export async function createDesk({ db = ':memory:', sync, store, site: siteId = 'desk', now = Date.now, holdMs } = {}) {
-  const site = typeof siteId === 'string' ? sites[siteId] : siteId;
-  if (!site) throw new TypeError(`No site called ${siteId}`);
+  const given = typeof siteId === 'string' ? sites[siteId] : siteId;
+  if (!given) throw new TypeError(`No site called ${siteId}`);
+  // Each business gets its own copy, so one owner's settings never reach another business.
+  const site = structuredClone(given);
   const on = site.modules;
   holdMs ??= (site.holdMinutes ?? 10) * 60_000;
   sync ??= await deskSync({ db });
@@ -124,6 +132,17 @@ export async function createDesk({ db = ':memory:', sync, store, site: siteId = 
     },
   });
   const tell = (values, template, data) => notify.notify({ sms: values.phone, ...(values.email ? { email: values.email } : {}) }, template, data);
+
+  // What the owner changed, over the defaults in site.js.
+  const defaults = structuredClone({ about: site.about, notice: site.notice, hours: site.hours, services: site.services ?? [], fund: site.fund ?? null });
+  function applySettings() {
+    const saved = store.get('settings', 'site') ?? {};
+    for (const name of ['about', 'notice', 'hours']) site[name] = saved[name] ?? defaults[name];
+    for (const svc of site.services ?? []) Object.assign(svc, defaults.services.find((one) => one.id === svc.id), saved.services?.[svc.id] ?? {});
+    if (site.fund) site.fund.about = saved.fundAbout ?? defaults.fund.about;
+  }
+  applySettings();
+  const owns = (guest, doc) => Boolean(guest && doc && (doc.owner === guest.pub || (guest.customer && doc.customer === guest.customer)));
 
   const today = () => moment(new Date(now()), site.timeZone);
   /** The next `daysAhead` days on the site's clock: `{ date, day }`. */
@@ -286,7 +305,7 @@ export async function createDesk({ db = ':memory:', sync, store, site: siteId = 
       if (confirmed.error) return { error: 'That time has gone. Choose another.', back: `/book/${svc.id}?date=${mine.date}` };
       const key = newKey('a');
       const { name, phone, email } = read.values;
-      const appt = { service: svc.id, staff: mine.staff, date: mine.date, time: mine.time, minutes: svc.minutes, pool: mine.pool, units: mine.units, name, phone, email, answers: read.answers.slice(3 - (email ? 0 : 1)), owner: guest.pub, status: 'booked', at: now() };
+      const appt = { service: svc.id, staff: mine.staff, date: mine.date, time: mine.time, minutes: svc.minutes, cents: svc.cents ?? 0, pool: mine.pool, units: mine.units, name, phone, email, answers: read.answers.slice(3 - (email ? 0 : 1)), owner: guest.pub, customer: guest.customer ?? '', status: 'booked', at: now() };
       await store.write('appointments', key, appt);
       await store.write('pending', guest.pub, { service: '' });
       await refreshBusy(mine.date);
@@ -297,13 +316,13 @@ export async function createDesk({ db = ':memory:', sync, store, site: siteId = 
     /** An appointment the guest made (or any, for the staff), or null. */
     appointment(guest, key, { staff = false } = {}) {
       const appt = keyOf('a').test(key ?? '') ? store.get('appointments', key) : null;
-      return appt && (staff || (guest && appt.owner === guest.pub)) ? { key, ...appt, ...appointmentWords(appt) } : null;
+      return appt && (staff || owns(guest, appt)) ? { key, ...appt, ...appointmentWords(appt) } : null;
     },
     appointmentsFor: (guest) =>
       guest
         ? store
             .under('appointments')
-            .filter((appt) => appt.owner === guest.pub && appt.status === 'booked' && appt.date >= today().date)
+            .filter((appt) => owns(guest, appt) && appt.status === 'booked' && appt.date >= today().date)
             .sort((a, b) => (a.date + a.time < b.date + b.time ? -1 : 1))
             .map((appt) => ({ ...appt, ...appointmentWords(appt) }))
         : [],
@@ -365,7 +384,7 @@ export async function createDesk({ db = ':memory:', sync, store, site: siteId = 
       const read = readFields(CONTACT, form);
       if (read.error) return read;
       const mark = `${key}/${guest.pub}`;
-      if (signing.has(mark) || store.under('rsvps').some((one) => one.event === key && one.owner === guest.pub && one.status === 'booked')) return { error: 'You’re already signed up. Cancel that first to change it.' };
+      if (signing.has(mark) || store.under('rsvps').some((one) => one.event === key && owns(guest, one) && one.status === 'booked')) return { error: 'You’re already signed up. Cancel that first to change it.' };
       signing.add(mark);
       try {
         return await this.takePlaces(guest, key, event, count, read.values);
@@ -384,16 +403,16 @@ export async function createDesk({ db = ':memory:', sync, store, site: siteId = 
       if (held.error) return { error: 'Those places just went. Try again.' };
       await places.confirm(guest.pub, pool, held.units);
       const rsvp = newKey('r');
-      await store.write('rsvps', rsvp, { event: key, title: event.title, count, places: held.units, name: values.name, phone: values.phone, email: values.email, owner: guest.pub, status: 'booked', at: now() });
+      await store.write('rsvps', rsvp, { event: key, title: event.title, count, places: held.units, name: values.name, phone: values.phone, email: values.email, owner: guest.pub, customer: guest.customer ?? '', status: 'booked', at: now() });
       await setLeft(key, event);
       await tell(values, 'signedUp', { name: values.name, count, ...eventWords(event) });
       return { ok: true, key: rsvp };
     },
     rsvp(guest, key, { staff = false } = {}) {
       const rsvp = keyOf('r').test(key ?? '') ? store.get('rsvps', key) : null;
-      return rsvp && (staff || (guest && rsvp.owner === guest.pub)) ? { key, ...rsvp, event: { key: rsvp.event, ...store.get('events', rsvp.event) } } : null;
+      return rsvp && (staff || owns(guest, rsvp)) ? { key, ...rsvp, event: { key: rsvp.event, ...store.get('events', rsvp.event) } } : null;
     },
-    rsvpsFor: (guest) => (guest ? store.under('rsvps').filter((one) => one.owner === guest.pub && one.status === 'booked' && (store.get('events', one.event)?.date ?? '') >= today().date) : []),
+    rsvpsFor: (guest) => (guest ? store.under('rsvps').filter((one) => owns(guest, one) && one.status === 'booked' && (store.get('events', one.event)?.date ?? '') >= today().date) : []),
     rsvpsAt: (eventKey) => store.under('rsvps').filter((one) => one.event === eventKey && one.status === 'booked'),
     async cancelRsvp(guest, key) {
       const rsvp = this.rsvp(guest, key);
@@ -421,7 +440,7 @@ export async function createDesk({ db = ':memory:', sync, store, site: siteId = 
       if (read.error) return read;
       const paid = await pay.pay({ id: `gift/${key}`, cents, method: { card: String(form.get('card') ?? '') }, description: `${site.fund.title} (test mode)` });
       if (!paid.ok) return { error: paid.error === 'declined' ? 'That card was declined. Try another.' : paid.error === 'in-progress' ? 'Your gift is already going through.' : 'That didn’t go through. Try again.' };
-      await store.write('gifts', key, { fund: site.fund.id, cents, name: read.values.name, email: read.values.email, ref: paid.ref, owner: guest.pub, at: now() });
+      await store.write('gifts', key, { fund: site.fund.id, cents, name: read.values.name, email: read.values.email, ref: paid.ref, owner: guest.pub, customer: guest.customer ?? '', at: now() });
       const fund = store.get('funds', site.fund.id);
       await store.write('funds', site.fund.id, { raised: fund.raised + cents, gifts: fund.gifts + 1 });
       if (read.values.email) await notify.notify({ email: read.values.email }, 'thanks', { name: read.values.name, amount: `$${(cents / 100).toFixed(2)}`, fund: site.fund.title });
@@ -446,5 +465,83 @@ export async function createDesk({ db = ':memory:', sync, store, site: siteId = 
       return { ok: true };
     },
     messages: () => store.under('messages').sort((a, b) => b.at - a.at),
+
+    // ---- Accounts, the admin and the owner's settings -----------------------------------------
+    /** On signing in or up: this browser's appointments, sign-ups and gifts join the account. */
+    async claim(guest, customer) {
+      let claimed = 0;
+      for (const collection of ['appointments', 'rsvps', 'gifts']) {
+        for (const doc of store.under(collection)) {
+          if (doc.owner === guest?.pub && !doc.customer) {
+            await store.write(collection, doc.key, { customer });
+            claimed++;
+          }
+        }
+      }
+      return claimed;
+    },
+    /** Everything of a customer's, for their account page: past and future, cancelled too. */
+    history(guest) {
+      const words = (appt) => ({ ...appt, ...appointmentWords(appt) });
+      return {
+        appointments: store.under('appointments').filter((appt) => owns(guest, appt)).map(words).sort((a, b) => (a.date + a.time < b.date + b.time ? 1 : -1)),
+        rsvps: store.under('rsvps').filter((one) => owns(guest, one)).map((one) => ({ ...one, event: { key: one.event, ...store.get('events', one.event) } })).sort((a, b) => (a.event.date < b.event.date ? 1 : -1)),
+        gifts: store.under('gifts').filter((gift) => owns(guest, gift)).sort((a, b) => b.at - a.at),
+      };
+    },
+    allAppointments: () => store.under('appointments').map((appt) => ({ ...appt, ...appointmentWords(appt) })),
+    allEvents: () => store.under('events').sort((a, b) => (a.date + a.starts < b.date + b.starts ? -1 : 1)),
+    allRsvps: () => store.under('rsvps'),
+    appointmentWords,
+
+    /** An email the app sends itself (a reset link): kept with the texts and emails, sent nowhere. */
+    async email(to, subject, body) {
+      await store.write('messages', newKey('s'), { channel: 'email', to, subject, body, at: now() });
+      return { ok: true };
+    },
+
+    /** Something someone on the staff did, for the activity list. */
+    async audit(by, what, ref = '') {
+      await store.write('audit', newKey('l'), { by: by?.name ?? 'System', what: String(what).slice(0, 200), ref, at: now() });
+    },
+    activity: (limit = 20) => store.under('audit').sort((a, b) => b.at - a.at).slice(0, limit),
+
+    /** The owner changes the words on the site: about, notice and hours; each service's price and line; the fund's line. */
+    async setSite(form) {
+      const text = (name, max) => String(form.get(name) ?? '').trim().slice(0, max);
+      const saved = { about: text('about', 300), notice: text('notice', 200), hours: text('hours', 120), services: {} };
+      if (!saved.about || !saved.hours) return { error: 'Give the about line and the hours.' };
+      for (const svc of site.services ?? []) {
+        const price = text(`price-${svc.id}`, 40);
+        const about = text(`about-${svc.id}`, 200);
+        const dollars = Number(text(`cents-${svc.id}`, 10).replace(/[$,]/g, ''));
+        if (!price || !about) return { error: `Give ${svc.name.toLowerCase()} a price and a line about it.` };
+        if (!Number.isFinite(dollars) || dollars < 0 || dollars > 10_000) return { error: `Give ${svc.name.toLowerCase()} a typical price in dollars, for the reports.` };
+        saved.services[svc.id] = { price, about, cents: Math.round(dollars * 100) };
+      }
+      if (site.fund) {
+        saved.fundAbout = text('fundAbout', 300);
+        if (!saved.fundAbout) return { error: 'Give the fund a line about it.' };
+      }
+      await store.write('settings', 'site', saved);
+      applySettings();
+      return { ok: true };
+    },
+
+    /** The owner adds an event to the calendar. */
+    async addEvent(form) {
+      if (!on.events) return { error: 'This site has no calendar.' };
+      const text = (name, max) => String(form.get(name) ?? '').trim().slice(0, max);
+      const event = { title: text('title', 120), date: text('date', 10), starts: text('starts', 5), ends: text('ends', 5), place: text('place', 120), about: text('about', 600) };
+      const capacity = text('capacity', 5);
+      if (!event.title || !event.place) return { error: 'Give the event a title and a place.' };
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(event.date) || event.date < today().date) return { error: 'Give a date from today on.' };
+      if (!/^\d{2}:\d{2}$/.test(event.starts) || !/^\d{2}:\d{2}$/.test(event.ends) || event.ends <= event.starts) return { error: 'Give a start and an end time, the end after the start.' };
+      const places = capacity === '' ? null : Number(capacity);
+      if (places !== null && !(Number.isInteger(places) && places >= 1 && places <= 500)) return { error: 'Places: leave it empty for no sign-up, or give 1 to 500.' };
+      const key = newKey('e');
+      await store.write('events', key, { ...event, capacity: places, left: places });
+      return { ok: true, key, event };
+    },
   };
 }
