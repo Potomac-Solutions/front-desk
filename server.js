@@ -21,7 +21,7 @@ import { staffPages, clientAddress } from '@potomac-solutions/kit/staff/pages';
 import { createCustomers } from '@potomac-solutions/kit/customers';
 import * as accountPages from './src/account.js';
 import { createAdmin } from './src/admin.js';
-import { demoOwner, lockedDemo, demoSignIn, nightly } from './src/demo.js';
+import { lockedStaff, lockedCustomers, demoSignIn, guestSignIn, nightly } from './src/demo.js';
 import { createNotices } from '@potomac-solutions/kit/notice';
 import { createTenants } from '@potomac-solutions/kit/tenant';
 import { createTenancy } from '@potomac-solutions/kit/tenancy';
@@ -65,11 +65,9 @@ export async function createApp({
   // How many proxies in front add to X-Forwarded-For (1 on Railway), so sign-in counts failures by
   // the real address. 0 trusts no header.
   proxies = Number(process.env.TRUST_PROXIES ?? 0),
-  // The public demo (src/demo.js): a demo owner per business, shown on the sign-in page, and data
-  // kept in memory so a restart is a reset.
+  // The public demo (src/demo.js): the seeded businesses, with their sign-ins shown and protected.
   demo = process.env.DEMO === '1',
 } = {}) {
-  if (demo) dataDir = ':memory:';
   if (!secret) {
     if (process.env.NODE_ENV === 'production') throw new Error('Set SESSION_SECRET.');
     secret = 'front-desk-development-only';
@@ -86,7 +84,7 @@ export async function createApp({
       const staff = createStaff({ store, secure, now, ...(staffCost ? { cost: staffCost } : {}) });
       // Customers who make an account (kit/customers), in the business's own log.
       const customers = createCustomers({ store, secure, now, ...(staffCost ? { cost: staffCost } : {}) });
-      return { desk, customers, staff: demo ? lockedDemo(staff, await demoOwner(staff)) : staff };
+      return { desk, customers: demo ? lockedCustomers(customers) : customers, staff: demo ? lockedStaff(staff, tenant.site) : staff };
     },
   });
   const guests = signedCookie({ secret, name: 'guest', secure });
@@ -370,7 +368,7 @@ ${sheet.map((one) => `<h3>${escape(one.name)}</h3>${one.appointments.length ? `<
         }
         if (path === '/account/sign-in') {
           const signed = await customers.signIn(form.get('email'), form.get('password'), { client: clientAddress(req, { proxies }) });
-          if (signed.error) return show(p, 'Sign in', accountPages.signIn({ problem: problem(signed.error === 'locked' ? 'Too many tries. Wait 15 minutes, or reset your password.' : 'That email and password don’t match.'), email: String(form.get('email') ?? '') }), { status: 401 });
+          if (signed.error) return show(p, 'Sign in', (demo ? `<div class="auth">${guestSignIn(escape)}</div>` : '') + accountPages.signIn({ problem: problem(signed.error === 'locked' ? 'Too many tries. Wait 15 minutes, or reset your password.' : 'That email and password don’t match.'), email: String(form.get('email') ?? '') }), { status: 401 });
           await desk.claim(guest, signed.customer);
           res.setHeader('set-cookie', signed.cookie);
           return back(res, '/account');
@@ -423,7 +421,8 @@ ${sheet.map((one) => `<h3>${escape(one.name)}</h3>${one.appointments.length ? `<
         const one = customerAction && customers.get(customerAction[1]);
         if (one && customerAction[2] === 'disabled') {
           const off = form.get('disabled') === 'yes';
-          await customers.setDisabled(one.customer, off);
+          const changed = await customers.setDisabled(one.customer, off);
+          if (changed?.error) return back(res, withProblem(`/admin/customers/${one.customer}`, changed));
           await desk.audit(who, `${off ? 'turned off' : 'turned back on'} ${one.name}’s account`, one.customer);
           return back(res, withDone(`/admin/customers/${one.customer}`, off ? 'Turned off and signed out everywhere.' : 'Turned back on.'));
         }
@@ -472,7 +471,7 @@ ${sheet.map((one) => `<h3>${escape(one.name)}</h3>${one.appointments.length ? `<
 
     // A customer's pages.
     if (path === '/account') return account ? show(p, 'Your account', accountPages.account({ desk, guest, customer: account, said: note(url) }), { here: '/account' }) : back(res, '/account/sign-in');
-    if (path === '/account/sign-in') return account ? back(res, '/account') : show(p, 'Sign in', accountPages.signIn({ problem: note(url) }), { here: '/account/sign-in' });
+    if (path === '/account/sign-in') return account ? back(res, '/account') : show(p, 'Sign in', (demo ? `<div class="auth">${guestSignIn(escape)}</div>` : '') + accountPages.signIn({ problem: note(url) }), { here: '/account/sign-in' });
     if (path === '/account/sign-up') return account ? back(res, '/account') : show(p, 'Make an account', accountPages.signUp());
     if (path === '/account/forgot') return show(p, 'Reset your password', accountPages.forgot());
     if (path === '/account/reset') {
@@ -482,7 +481,7 @@ ${sheet.map((one) => `<h3>${escape(one.name)}</h3>${one.appointments.length ? `<
 
     // The admin: staff only; reports, settings and the outbox for owners.
     if (path === '/admin' || path.startsWith('/admin/')) {
-      if (!atDesk) return show(p, 'Sign in', `<div class="auth">${(demo ? demoSignIn(escape) : '') + pages.signIn(url)}</div>`);
+      if (!atDesk) return show(p, 'Sign in', `<div class="auth">${(demo ? demoSignIn(escape, staff.demoLogins) : '') + pages.signIn(url)}</div>`);
       const bar = pages.bar(who);
       const said = note(url);
       const wide = { wide: true, here: '/admin' };
@@ -537,7 +536,7 @@ ${sheet.map((one) => `<h3>${escape(one.name)}</h3>${one.appointments.length ? `<
     if (await pages.handle(req, res, url, null)) return;
     if (path === '/staff') {
       pages.noStore(res);
-      if (!atDesk) return show(p, 'Sign in', `<div class="auth">${(demo ? demoSignIn(escape) : '') + pages.signIn(url)}</div>`);
+      if (!atDesk) return show(p, 'Sign in', `<div class="auth">${(demo ? demoSignIn(escape, staff.demoLogins) : '') + pages.signIn(url)}</div>`);
       return show(p, 'Staff', pages.bar(who) + staffPage(p, url), { wide: true });
     }
     send(res, 404, 'Not found');
@@ -603,7 +602,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const links = await server.open();
   if (server.demo) nightly();
   server.listen(port, '0.0.0.0', () => {
-    if (server.demo) console.log('Demo: each business has a demo owner (shown on its sign-in page), and the data resets every night.');
+    if (server.demo) console.log('Demo: the seeded businesses, with their sign-ins on the sign-in pages; the data resets every night.');
     for (const tenant of tenantsFromEnv() ?? DEFAULT_TENANTS) console.log(`${sites[tenant.site].name}: http://${tenant.hosts[0]}:${port}`);
     for (const { tenant, token } of links) console.log(`Set up the first owner of ${sites[tenant.site].name} (works once, for a day): http://${tenant.hosts[0]}:${port}/staff/accept?token=${token}`);
   });

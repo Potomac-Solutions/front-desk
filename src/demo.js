@@ -1,39 +1,71 @@
-// The public demo: made-up businesses anyone can try, staff side included.
+// The public demo (DEMO=1): both seeded businesses, open to anyone, staff side included.
 //
-// - Each business starts with a demo owner, whose email and password the sign-in page shows.
-// - Nobody can change the demo account: not its password, roles or reset link, and nobody can
+// - The demo sign-ins (below) are the ones `bin/seed.js` makes. Each business's sign-in page shows
+//   its own, and the customer sign-in page shows the customer, who has an account at both.
+// - Nobody can change a demo account: not its password, roles, name or reset link, and nobody can
 //   turn it off. Anything else a visitor does (bookings, sign-ups, gifts, people they invite)
 //   lasts until the next reset.
-// - The data is kept in memory, so a restart is a reset. `nightly` asks the process to exit once
-//   a day at a quiet hour; the host restarts it (Railway's "always" restart policy).
+// - Railway starts the demo with `npm run demo` (seed fresh, then serve). `nightly` exits once a
+//   day at a quiet hour, and Railway's "always" restart policy starts it again: fresh data, the
+//   same sign-ins, and appointments dated from today.
 //
-// Nothing here is used unless the server runs with DEMO=1.
+// Nothing here changes the app unless the server runs with DEMO=1.
 
-export const DEMO_OWNER = { email: 'demo@example.com', name: 'Demo Owner', password: 'try the front desk' };
+export const DEMO = {
+  desk: {
+    owner: { email: 'owner@example.com', name: 'Rosa Dunmore', password: 'yough-owner-demo' },
+    staff: { email: 'jess@example.com', name: 'Jess Calloway', password: 'yough-staff-demo' },
+  },
+  community: {
+    owner: { email: 'owner@example.com', name: 'Dale Pruitt', password: 'pine-hollow-owner-demo' },
+    staff: { email: 'office@example.com', name: 'Wren Abbott', password: 'pine-hollow-staff-demo' },
+  },
+  customer: { email: 'riley@example.com', name: 'Riley Morgan', password: 'front-desk-guest-demo' },
+};
 
-const REFUSED = { error: 'The demo account can’t be changed. Everything resets overnight.' };
+const REFUSED = { error: 'The demo accounts can’t be changed. Everything resets overnight.' };
+const same = (email) => String(email ?? '').trim().toLowerCase();
 
-/** Give a new business its demo owner. Returns the account id. */
-export async function demoOwner(staff) {
-  const made = await staff.accept(await staff.setup(), DEMO_OWNER);
-  if (!made.ok) throw new Error(`demo owner: ${made.error}`);
-  return made.account;
-}
+/** One business's demo sign-ins (`site` is the tenant's site: `desk` or `community`). */
+export const demoLogins = (site) => (DEMO[site] ? [['Owner', DEMO[site].owner], ['Staff', DEMO[site].staff]] : []);
 
-/** The kit's staff, with every change to the demo account refused. */
-export function lockedDemo(staff, demoAccount) {
+/** The kit's staff, with every change to one of this business's demo accounts refused. */
+export function lockedStaff(staff, site) {
+  const logins = demoLogins(site);
+  const emails = new Set(logins.map(([, account]) => same(account.email)));
+  const isDemo = (account) => staff.list().some((one) => one.account === account && emails.has(same(one.email)));
   return Object.assign(Object.create(staff), {
-    resetLink: (by, account) => (account === demoAccount ? REFUSED : staff.resetLink(by, account)),
-    setRoles: (by, account, roles) => (account === demoAccount ? REFUSED : staff.setRoles(by, account, roles)),
-    setDisabled: (by, account, disabled) => (account === demoAccount ? REFUSED : staff.setDisabled(by, account, disabled)),
-    endSessions: (account) => (account === demoAccount ? 0 : staff.endSessions(account)),
-    changePassword: (who, current, next) => (who?.account === demoAccount ? REFUSED : staff.changePassword(who, current, next)),
+    demoLogins: logins,
+    resetLink: (by, account) => (isDemo(account) ? REFUSED : staff.resetLink(by, account)),
+    setRoles: (by, account, roles) => (isDemo(account) ? REFUSED : staff.setRoles(by, account, roles)),
+    setDisabled: (by, account, disabled) => (isDemo(account) ? REFUSED : staff.setDisabled(by, account, disabled)),
+    endSessions: (account) => (isDemo(account) ? 0 : staff.endSessions(account)),
+    changePassword: (who, current, next) => (isDemo(who?.account) ? REFUSED : staff.changePassword(who, current, next)),
   });
 }
 
-/** The panel above the sign-in form. */
-export const demoSignIn = (escape) =>
-  `<section class="panel demo"><h2>Try the staff side</h2><p>This is a demo. Sign in as the demo owner:</p><p><strong>Email</strong> ${escape(DEMO_OWNER.email)}<br><strong>Password</strong> ${escape(DEMO_OWNER.password)}</p><p class="hint">Everything you do here is cleared overnight. Nothing is really booked, given or sent.</p></section>`;
+/** The kit's customers, with every change to the demo customer refused. */
+export function lockedCustomers(customers) {
+  const isDemo = (customer) => same(customers.get(customer)?.email) === DEMO.customer.email;
+  return Object.assign(Object.create(customers), {
+    // No reset link for the demo customer; the app answers as it does for an unknown email.
+    resetToken: (email) => (same(email) === DEMO.customer.email ? null : customers.resetToken(email)),
+    rename: (customer, name) => (isDemo(customer) ? REFUSED : customers.rename(customer, name)),
+    setDisabled: (customer, disabled) => (isDemo(customer) ? REFUSED : customers.setDisabled(customer, disabled)),
+    endSessions: (customer) => (isDemo(customer) ? 0 : customers.endSessions(customer)),
+  });
+}
+
+const login = (escape, who, account) =>
+  `<p><strong>${escape(who)}</strong><br>${escape(account.email)}<br>Password: ${escape(account.password)}</p>`;
+
+/** Above a business's staff sign-in form. */
+export const demoSignIn = (escape, logins = []) =>
+  `<section class="panel demo"><h2>Try the staff side</h2><p>This is a demo. Sign in as the owner to see everything, or as staff to work the desk.</p>${logins.map(([who, account]) => login(escape, who, account)).join('')}<p class="hint">Everything you do here is cleared overnight. Nothing is really booked, given or sent.</p></section>`;
+
+/** Above the customer sign-in form. */
+export const guestSignIn = (escape) =>
+  `<section class="panel demo"><h2>Try a customer account</h2>${login(escape, 'Customer', DEMO.customer)}<p class="hint">This is a demo. Everything is cleared overnight.</p></section>`;
 
 /**
  * Exit once a day at `hour` (in `timeZone`), so the host restarts the demo with fresh data.

@@ -83,9 +83,10 @@ A business's setup link is printed at start until it has an owner; each lasts a 
 
 With `DEMO=1` the server is a demo anyone can try, staff side included (`src/demo.js`):
 
-- Each business starts with a demo owner, and its sign-in page shows the login: `demo@example.com`, password `try the front desk`. There are no setup links.
-- Nobody can change the demo account: not its password, its roles or a reset link for it, and nobody can turn it off. Everything else a visitor does lasts until the reset, including people they invite.
-- The data is kept in memory, so a restart is a reset, and nothing needs a volume. Once a night at 4 am New York time the server exits, and Railway's "always" restart policy (`railway.json`) starts it again with fresh data.
+- It runs on the seeded data (`npm run demo` seeds fresh, then serves), so each business's admin, day sheet and reports are full from the first visit.
+- Each business's staff sign-in page shows its own sign-ins (the table under **Try it**), and the customer sign-in page shows the customer, who has an account at both.
+- Nobody can change a demo account: not its password, roles, name or reset link, and nobody can turn it off. Everything else a visitor does lasts until the reset, including people they invite.
+- Once a night at 4 am New York time the server exits, and Railway's "always" restart policy (`railway.json`) starts it again with `npm run demo`: fresh data dated from today, and the same sign-ins. No volume is needed.
 
 ## Deploy the demo on Railway
 
@@ -104,7 +105,7 @@ With `DEMO=1` the server is a demo anyone can try, staff side included (`src/dem
 
 3. Under **Settings → Networking**, add both custom domains, `salon.potomac.solutions` and `firehall.potomac.solutions`. Railway shows a CNAME target for each.
 4. At the DNS host for `potomac.solutions`, add the two CNAME records Railway gave (`salon` and `firehall`), and any TXT record it asks for to verify them. Railway issues the certificates once the records resolve.
-5. Open each address. Its sign-in page shows the demo login.
+5. Open each address. Its staff sign-in page shows its demo sign-ins.
 
 For a real business, leave out `DEMO`, set `DATA_DIR` to a mounted volume (the data must outlive a deploy), and claim each setup link from the deploy log straight away.
 
