@@ -28,6 +28,13 @@ import { createTenancy } from '@potomac-solutions/kit/tenancy';
 import { createDesk, deskSync, CONTACT, timeLabel, dateLabel } from './src/desk.js';
 import { sites } from './src/site.js';
 import { layout, escape } from './src/layout.js';
+import { shell } from './src/shell.js';
+import { landing } from './src/home.js';
+import { cards } from './src/tables.js';
+import { serveAsset } from './src/assets.js';
+
+/** The staff's pages, for marking where they are in the sidebar. */
+const STAFF_LINKS = ['/staff', '/admin', '/admin/appointments', '/admin/events', '/admin/gifts', '/admin/inbox', '/admin/customers', '/admin/reports', '/admin/settings', '/admin/outbox', '/staff/people'];
 
 const here = dirname(fileURLToPath(import.meta.url));
 const components = join(here, 'src', 'components');
@@ -97,6 +104,8 @@ export async function createApp({
   const notices = createNotices({ secret });
   const back = (res, location) => (res.writeHead(303, { location: notices.sign(location) }), res.end());
   const page = (res, p, title, body, options = {}) => send(res, options.status ?? 200, p.finish(layout({ title, site, body, ...options })));
+  // The staff's pages sit in their own frame (src/shell.js), with tables that fit a phone.
+  const shellPage = (res, p, title, body, options = {}) => send(res, options.status ?? 200, p.finish(shell({ title, site, body: cards(body), owner: staff.can(res.who, 'owner'), waiting: desk.inbox().filter((one) => !one.handled).length, here: options.here ?? '' })));
   const admin = createAdmin({ desk, customers, now });
   const downloadCsv = (res, name, text) => (res.writeHead(200, { 'content-type': 'text/csv; charset=utf-8', 'content-disposition': `attachment; filename="${name}"`, 'cache-control': 'no-store' }), res.end(text));
   const origin = (req) => process.env.PUBLIC_URL || `http://${req.headers.host ?? 'localhost'}`;
@@ -139,21 +148,17 @@ export async function createApp({
 
   // ---- The guest's pages ----------------------------------------------------------------------------
   function home(p, url, guest, account) {
-    const mine = desk.appointmentsFor(guest);
-    const signed = on.events ? desk.rsvpsFor(guest) : [];
     const fund = desk.fund();
-    const first = on.appointments ? ['#book', 'Book an appointment'] : on.events ? ['/events', 'See what’s on'] : ['/forms/' + site.forms[0].id, site.forms[0].title];
-    return `<section class="hero"><h1>${escape(site.name)}</h1><p class="lede">${escape(site.about)}</p><div class="actions"><a class="go" href="${first[0]}">${escape(first[1])}</a>${on.giving ? '<a class="button light" href="/give">Give</a>' : ''}${account ? '<a class="button light" href="/account">Your account</a>' : '<a class="button light" href="/account/sign-up">Make an account</a>'}</div></section>
-${note(url)}
-${site.notice ? `<p class="bulletin">${escape(site.notice)}</p>` : ''}
-${mine.length ? `<section class="panel"><h2>Your appointments</h2><ul>${mine.map((appt) => `<li><a href="/a/${appt.key}">${escape(appt.when)}</a> · ${escape(appt.what)}</li>`).join('')}</ul></section>` : ''}
-${signed.length ? `<section class="panel"><h2>You’re signed up</h2><ul>${signed.map((one) => `<li><a href="/r/${one.key}">${escape(one.title)}</a> · ${one.count} ${one.count === 1 ? 'place' : 'places'}</li>`).join('')}</ul></section>` : ''}
-${on.appointments ? `<section id="book"><h2>Book an appointment</h2></section><ul class="cards">${site.services.map((svc) => `<li class="card"><h3>${escape(svc.name)}</h3><p class="meta">${svc.minutes} minutes · ${escape(svc.price)}</p><p>${escape(svc.about)}</p><a class="go" href="/book/${svc.id}">Book</a></li>`).join('')}</ul>` : ''}
-${on.events ? `<section><h2>Coming up</h2></section><ul class="cards">${desk.events().slice(0, 3).map((event) => eventCard(p, event)).join('')}</ul><p><a href="/events">The whole calendar</a></p>` : ''}
-${fund ? `<section class="panel"><h2>${escape(fund.title)}</h2><p>${escape(site.fund.about)}</p>${fundBar(p, fund)}<a class="go" href="/give">Give</a></section>` : ''}
-<section><h2>Get in touch</h2></section>
-<ul class="cards">${site.forms.map((form) => `<li class="card"><h3>${escape(form.title)}</h3><p>${escape(form.intro)}</p><a class="go" href="/forms/${form.id}">Open the form</a></li>`).join('')}</ul>
-<section class="panel"><h2>Visit</h2><dl><dt>Where</dt><dd>${escape(site.town)}</dd><dt>Hours</dt><dd>${escape(site.hours)}</dd>${on.appointments ? `<dt>Who</dt><dd>${site.staff.map((one) => escape(one.name)).join(' and ')}</dd>` : ''}</dl></section>`;
+    return landing({
+      site,
+      mine: desk.appointmentsFor(guest),
+      signed: on.events ? desk.rsvpsFor(guest) : [],
+      fund,
+      fundBar: fund ? fundBar(p, fund) : '',
+      eventCards: on.events ? desk.events().slice(0, 3).map((event) => eventCard(p, event)).join('') : '',
+      said: note(url),
+      account,
+    });
   }
 
   function bookPage(p, url, guest, svc) {
@@ -164,7 +169,7 @@ ${fund ? `<section class="panel"><h2>${escape(fund.title)}</h2><p>${escape(site.
     const link = (staffId, date) => `/book/${svc.id}?staff=${staffId}${date ? `&date=${date}` : ''}`;
     const holding = desk.pending(guest);
     const choices = [{ id: 'any', name: 'Anyone' }, ...desk.staffFor(svc.id)];
-    return `<section><h1>${escape(svc.name)}</h1><p class="lede">${svc.minutes} minutes · ${escape(svc.price)} · ${escape(svc.about)}</p></section>
+    return `<section class="page-head"><h1>${escape(svc.name)}</h1><p class="lede">${svc.minutes} minutes · ${escape(svc.price)} · ${escape(svc.about)}</p></section>
 ${note(url)}
 ${holding?.until ? `<p class="bulletin">You’re holding ${escape(dateLabel(holding.date))} at ${escape(timeLabel(holding.time))}. <a href="/book/details">Finish booking it</a>, or choose another time below.</p>` : ''}
 <section class="panel"><h2>With</h2><ul class="days">${choices.map((one) => `<li><a href="${link(one.id, day?.date)}"${one.id === staffChoice ? ' aria-current="true"' : ''}>${escape(one.name)}</a></li>`).join('')}</ul></section>
@@ -185,7 +190,7 @@ ${day ? `<section class="panel"><h2>${escape(day.label)}: choose a time</h2><p c
 
   function detailsPage(p, url, holding) {
     const svc = desk.service(holding.service);
-    return `<section><h1>Your details</h1><p class="lede">${escape(svc.name)} with ${escape(desk.person(holding.staff).name)}, ${escape(dateLabel(holding.date))} at ${escape(timeLabel(holding.time))}.</p></section>
+    return `<section class="page-head"><h1>Your details</h1><p class="lede">${escape(svc.name)} with ${escape(desk.person(holding.staff).name)}, ${escape(dateLabel(holding.date))} at ${escape(timeLabel(holding.time))}.</p></section>
 ${note(url)}
 <p class="bulletin">${holding.until ? `Held for you until ${escape(clockAt(holding.until))}.` : 'Your hold ran out, but you can still book it if nobody has taken it.'}</p>
 <form class="panel" method="post" action="/book/details">${fields([...CONTACT, ...svc.intake])}<button type="submit">Book it</button></form>
@@ -194,7 +199,7 @@ ${note(url)}
 
   function appointmentPage(url, appt) {
     const cancelled = appt.status === 'cancelled';
-    return `<section><h1>${cancelled ? 'Cancelled' : 'You’re booked'}</h1><p class="lede">${escape(appt.what[0].toUpperCase() + appt.what.slice(1))}, ${escape(appt.when)}.</p></section>
+    return `<section class="page-head"><h1>${cancelled ? 'Cancelled' : 'You’re booked'}</h1><p class="lede">${escape(appt.what[0].toUpperCase() + appt.what.slice(1))}, ${escape(appt.when)}.</p></section>
 ${note(url)}
 <section class="panel"><dl><dt>Name</dt><dd>${escape(appt.name)}</dd><dt>Phone</dt><dd>${escape(appt.phone)}</dd>${appt.email ? `<dt>Email</dt><dd>${escape(appt.email)}</dd>` : ''}</dl>${answersList(appt.answers)}</section>
 ${cancelled ? `<p><a class="go" href="/book/${appt.service}">Book another time</a></p>` : `<form method="post" action="/a/${appt.key}/cancel"><button class="button light" type="submit">Cancel this appointment</button></form>`}`;
@@ -210,7 +215,7 @@ ${cancelled ? `<p><a class="go" href="/book/${appt.service}">Book another time</
       const month = new Date(`${event.date}T12:00:00Z`).toLocaleDateString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' });
       months.set(month, [...(months.get(month) ?? []), event]);
     }
-    return `<section><h1>Calendar</h1><p class="lede">What’s on at ${escape(site.name)}.</p></section>
+    return `<section class="page-head"><h1>Calendar</h1><p class="lede">What’s on at ${escape(site.name)}.</p></section>
 ${note(url)}
 ${[...months].map(([month, events]) => `<h2 class="month">${escape(month)}</h2><ul class="cards">${events.map((event) => eventCard(p, event)).join('')}</ul>`).join('') || '<p>Nothing on the calendar yet.</p>'}`;
   }
@@ -230,7 +235,7 @@ ${signUp}`;
 
   function rsvpPage(p, url, rsvp) {
     const cancelled = rsvp.status === 'cancelled';
-    return `<section><h1>${cancelled ? 'Cancelled' : 'You’re signed up'}</h1><p class="lede">${escape(rsvp.event.title)}, ${escape(eventWhen(rsvp.event))}. ${rsvp.count} ${rsvp.count === 1 ? 'place' : 'places'}, for ${escape(rsvp.name)}.</p></section>
+    return `<section class="page-head"><h1>${cancelled ? 'Cancelled' : 'You’re signed up'}</h1><p class="lede">${escape(rsvp.event.title)}, ${escape(eventWhen(rsvp.event))}. ${rsvp.count} ${rsvp.count === 1 ? 'place' : 'places'}, for ${escape(rsvp.name)}.</p></section>
 ${note(url)}
 ${placesLeft(p, rsvp.event)}
 ${cancelled ? `<p><a class="go" href="/events/${rsvp.event.key}">Sign up again</a></p>` : `<form method="post" action="/r/${rsvp.key}/cancel"><button class="button light" type="submit">Cancel, and give the places back</button></form>`}`;
@@ -238,7 +243,7 @@ ${cancelled ? `<p><a class="go" href="/events/${rsvp.event.key}">Sign up again</
 
   function givePage(p, url) {
     const fund = desk.fund();
-    return `<section><h1>Give to ${escape(fund.title.replace(/^The /, 'the '))}</h1><p class="lede">${escape(site.fund.about)}</p></section>
+    return `<section class="page-head"><h1>Give to ${escape(fund.title.replace(/^The /, 'the '))}</h1><p class="lede">${escape(site.fund.about)}</p></section>
 ${note(url)}
 <section class="panel">${fundBar(p, fund)}</section>
 <form class="panel" method="post" action="/give">
@@ -253,14 +258,14 @@ ${note(url)}
   }
 
   function formPage(url, form) {
-    return `<section><h1>${escape(form.title)}</h1><p class="lede">${escape(form.intro)}</p></section>
+    return `<section class="page-head"><h1>${escape(form.title)}</h1><p class="lede">${escape(form.intro)}</p></section>
 ${note(url)}
 <form class="panel" method="post" action="/forms/${form.id}">${fields(form.fields)}<button type="submit">Send</button></form>`;
   }
 
   // ---- The staff's page --------------------------------------------------------------------------------
   function staffPage(p, url) {
-    const parts = [`<section><h1>${on.appointments ? 'The front desk' : 'The office'}</h1><p class="lede">Everything people have booked, signed up for, given and sent.</p></section>`, note(url)];
+    const parts = [`<section class="page-head"><h1>${on.appointments ? 'The front desk' : 'The office'}</h1><p class="lede">Everything people have booked, signed up for, given and sent.</p></section>`, note(url)];
     if (on.appointments) {
       const days = desk.upcoming().filter(({ day }) => site.staff.some((one) => one.days.includes(day)));
       const day = days.find((one) => one.date === url.searchParams.get('day'))?.date ?? days[0].date;
@@ -290,7 +295,9 @@ ${sheet.map((one) => `<h3>${escape(one.name)}</h3>${one.appointments.length ? `<
   }
 
   // ---- Staff accounts: sign-in, links, people and passwords (the kit's pages) -------------------
-  const pages = staffPages({ staff, notices, proxies, home: '/staff', business: site.name, secure, render: (res, title, body) => page(res, zubra.page(), title, body) });
+  const pages = staffPages({ staff, notices, proxies, home: '/staff', business: site.name, secure, // A signed-in member of staff sees the kit's pages (people, their password) inside the staff frame;
+    // signing in and accepting an invite are a narrow card on the business's own page.
+    render: (res, title, body) => (staff.can(res.who, 'staff') ? shellPage(res, zubra.page(), title, body, { here: title === 'People' ? '/staff/people' : '' }) : page(res, zubra.page(), title, `<div class="auth">${body}</div>`)) });
 
   /** Answer one request for this business. */
   return async function handle(req, res, url, browserGuest) {
@@ -301,7 +308,10 @@ ${sheet.map((one) => `<h3>${escape(one.name)}</h3>${one.appointments.length ? `<
     const account = customers.session(req);
     const guest = browserGuest && { ...browserGuest, customer: account?.customer };
     const nav = { customer: account, staff: atDesk };
-    const show = (p, title, body, options = {}) => page(res, p, title, body, { nav, ...options });
+    res.who = who;
+    // Staff pages (they pass `wide`) go in the staff frame; the rest in the business's own page.
+    const staffHere = () => STAFF_LINKS.filter((href) => url.pathname === href || url.pathname.startsWith(`${href}/`)).sort((a, b) => b.length - a.length)[0] ?? '';
+    const show = (p, title, body, { wide = false, ...options } = {}) => (wide ? shellPage(res, p, title, body, { here: staffHere(), ...options }) : page(res, p, title, body, { nav, ...options }));
     if (url.pathname.startsWith('/account') || url.pathname.startsWith('/admin')) res.setHeader('cache-control', 'no-store');
     if (req.method === 'POST') {
       // Every form is ours: another site's post is refused (the cookies are SameSite=Lax too).
@@ -458,7 +468,7 @@ ${sheet.map((one) => `<h3>${escape(one.name)}</h3>${one.appointments.length ? `<
 
     const p = zubra.page();
     const path = url.pathname;
-    if (path === '/') return show(p, 'Home', home(p, url, guest, account), { here: '/' });
+    if (path === '/') return show(p, 'Home', home(p, url, guest, account), { here: '/', landing: true });
 
     // A customer's pages.
     if (path === '/account') return account ? show(p, 'Your account', accountPages.account({ desk, guest, customer: account, said: note(url) }), { here: '/account' }) : back(res, '/account/sign-in');
@@ -472,7 +482,7 @@ ${sheet.map((one) => `<h3>${escape(one.name)}</h3>${one.appointments.length ? `<
 
     // The admin: staff only; reports, settings and the outbox for owners.
     if (path === '/admin' || path.startsWith('/admin/')) {
-      if (!atDesk) return show(p, 'Sign in', (demo ? demoSignIn(escape) : '') + pages.signIn(url));
+      if (!atDesk) return show(p, 'Sign in', `<div class="auth">${(demo ? demoSignIn(escape) : '') + pages.signIn(url)}</div>`);
       const bar = pages.bar(who);
       const said = note(url);
       const wide = { wide: true, here: '/admin' };
@@ -491,7 +501,7 @@ ${sheet.map((one) => `<h3>${escape(one.name)}</h3>${one.appointments.length ? `<
       const oneCustomer = path.match(/^\/admin\/customers\/(c[a-z0-9]+)$/);
       const one = oneCustomer && customers.get(oneCustomer[1]);
       if (one) return show(p, one.name, admin.customer({ one, owner, bar, said }), wide);
-      if (['/admin/reports', '/admin/reports.csv', '/admin/settings', '/admin/outbox'].includes(path) && !owner) return show(p, 'Owners only', '<section><h1>Owners only</h1><p class="lede">Ask an owner to see this page.</p><p><a href="/admin">Back to the overview</a></p></section>', { status: 403 });
+      if (['/admin/reports', '/admin/reports.csv', '/admin/settings', '/admin/outbox'].includes(path) && !owner) return show(p, 'Owners only', '<section class="page-head"><h1>Owners only</h1><p class="lede">Reports, settings and the outbox are for owners. Ask one to show you this page.</p></section><p><a class="button light" href="/admin">Back to the overview</a></p>', { status: 403, wide: true });
       if (path === '/admin/reports') return show(p, 'Reports', admin.reports({ url, owner, bar }), wide);
       if (path === '/admin/reports.csv') return downloadCsv(res, 'report.csv', admin.reportCsv(url));
       if (path === '/admin/settings') return show(p, 'Settings', admin.settings({ owner, bar, said }), wide);
@@ -527,8 +537,8 @@ ${sheet.map((one) => `<h3>${escape(one.name)}</h3>${one.appointments.length ? `<
     if (await pages.handle(req, res, url, null)) return;
     if (path === '/staff') {
       pages.noStore(res);
-      if (!atDesk) return show(p, 'Sign in', (demo ? demoSignIn(escape) : '') + pages.signIn(url));
-      return show(p, 'Staff', pages.bar(who) + staffPage(p, url));
+      if (!atDesk) return show(p, 'Sign in', `<div class="auth">${(demo ? demoSignIn(escape) : '') + pages.signIn(url)}</div>`);
+      return show(p, 'Staff', pages.bar(who) + staffPage(p, url), { wide: true });
     }
     send(res, 404, 'Not found');
   };
@@ -559,7 +569,10 @@ ${sheet.map((one) => `<h3>${escape(one.name)}</h3>${one.appointments.length ? `<
       if (zubra.handle(req, res)) return;
       const url = new URL(req.url, 'http://localhost');
       if (url.pathname === '/health') return res.writeHead(200, { 'content-type': 'text/plain' }).end('ok');
-      if (url.pathname === '/favicon.ico') return res.writeHead(204).end();
+      if (serveAsset(req, res, url)) return;
+      // Made-up businesses ask not to be listed.
+      if (url.pathname === '/robots.txt') return res.writeHead(200, { 'content-type': 'text/plain; charset=utf-8' }).end('User-agent: *\nDisallow: /\n');
+      if (url.pathname === '/favicon.ico') return res.writeHead(302, { location: '/assets/favicon.svg' }).end();
       const space = await tenancy.space(req);
       if (!space) return res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' }).end('No business here.');
       const guest = guests.ensure(req, res);

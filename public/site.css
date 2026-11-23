@@ -1,0 +1,120 @@
+/*
+  The landing page, for whichever business the address belongs to: a full-screen photograph, the
+  business's name and one line, then a section for each module it has switched on: services as
+  photo cards, what's coming up, the fund over a photograph, its forms, and where to find it.
+*/
+
+.landing { display: block; }
+.sec { padding: clamp(3.5rem, 9vw, 6.5rem) 0; }
+.sec.dark { background: var(--night); color: var(--on-night); }
+.sec.dark .kicker { color: var(--glow); }
+.head { max-width: 44rem; margin-bottom: clamp(1.75rem, 4vw, 3rem); }
+.head.center { margin-inline: auto; text-align: center; }
+.head h2, .sec h2.big { font-size: clamp(2.2rem, 5.5vw, 3.6rem); letter-spacing: -0.02em; }
+.head p:not(.kicker) { margin: 0.9rem 0 0; color: var(--muted-foreground); font-size: 1.15rem; }
+.sec.dark .head p:not(.kicker) { color: var(--on-night-soft); }
+
+/* Hero: the photograph is the page. */
+.hero { position: relative; isolation: isolate; display: grid; grid-template-rows: 1fr auto; min-height: min(92svh, 56rem); background: var(--night); color: #fff; overflow: hidden; }
+.hero .bg, .banner .bg { position: absolute; inset: 0; z-index: -2; width: 100%; height: 100%; object-fit: cover; }
+.hero::before { content: ""; position: absolute; inset: 0; z-index: -1; background:
+    linear-gradient(90deg, rgb(var(--shade-rgb) / 0.88) 0%, rgb(var(--shade-rgb) / 0.55) 45%, rgb(var(--shade-rgb) / 0.1) 80%),
+    linear-gradient(0deg, rgb(var(--shade-rgb) / 0.85) 0%, transparent 38%); }
+.hero-words { align-self: center; padding-block: clamp(3rem, 10vh, 7rem) clamp(2rem, 6vh, 4rem); }
+.hero .kicker { color: var(--glow); font-size: 0.9rem; }
+.hero h1 { max-width: 18ch; font-size: clamp(2.6rem, 7.5vw, 5.2rem); line-height: 0.98; letter-spacing: -0.015em; text-shadow: 0 2px 30px rgb(0 0 0 / 0.35); }
+.hero .tag { margin: 0.6rem 0 0; max-width: 22ch; font: var(--soft, italic 600) clamp(1.7rem, 4.4vw, 3rem) / 1.05 var(--font-heading); color: var(--glow); }
+.hero .lede { margin-top: 1.5rem; max-width: 30rem; font-size: clamp(1.2rem, 2.4vw, 1.5rem); color: var(--on-night); }
+.hero .actions { display: flex; flex-wrap: wrap; gap: 0.9rem; margin-top: 2.25rem; }
+.landing .go.lg, .landing .button.lg { min-height: 3.75rem; padding: 1rem 2.2rem; font-size: 1.2rem; }
+.hero .go { background: var(--glow); color: var(--on-glow); box-shadow: 0 10px 30px -8px rgb(var(--glow-rgb) / 0.55); }
+.hero .go:hover { background: var(--glow-hi); }
+.hero .button.ghost { color: #fff; box-shadow: inset 0 0 0 2px rgb(255 255 255 / 0.7); }
+.hero .button.ghost:hover { background: rgb(255 255 255 / 0.14); }
+.hero-strip { border-top: 1px solid rgb(255 255 255 / 0.18); background: rgb(var(--shade-rgb) / 0.55); backdrop-filter: blur(6px); }
+.hero-strip .wrap { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 2.5rem; padding-block: 1rem; font-weight: 600; }
+.hero-strip p { margin: 0; }
+.hero-strip a { font-weight: 700; }
+.live { display: inline-flex; align-items: center; gap: 0.55rem; }
+.live .dot { width: 0.65rem; height: 0.65rem; border-radius: 50%; background: #6fd08c; box-shadow: 0 0 0 0 rgb(111 208 140 / 0.6); animation: pulse 2.4s infinite; }
+@keyframes pulse { 70% { box-shadow: 0 0 0 0.6rem rgb(111 208 140 / 0); } 100% { box-shadow: 0 0 0 0 rgb(111 208 140 / 0); } }
+
+/* Your open orders, when you have some; and the kitchen's note. */
+.mine { margin-top: 1.25rem; }
+.mine .panel { background: var(--brand); color: #fff; box-shadow: var(--shadow); }
+.mine h2 { font-size: 1.15rem; }
+.mine ul { list-style: none; padding: 0; display: grid; gap: 0.4rem; }
+.mine li a { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0.25rem 1rem; padding: 0.6rem 0.9rem; border-radius: var(--radius-sm); background: rgb(255 255 255 / 0.12); text-decoration: none; font-weight: 600; }
+.mine li a:hover { background: rgb(255 255 255 / 0.2); }
+.mine li span { color: var(--glow); text-transform: capitalize; }
+.said { padding-top: 1.25rem; display: grid; gap: 0.75rem; }
+.said:empty { display: none; }
+
+/* A photograph beside a promise. */
+.split { padding: clamp(3rem, 8vw, 6rem) 0; }
+.split .wrap { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr); gap: clamp(1.75rem, 6vw, 5rem); align-items: center; }
+.split .wrap { align-items: start; }
+.split .pic { position: sticky; top: 6rem; aspect-ratio: 3 / 2; border-radius: 1.5rem; overflow: hidden; background: var(--muted); box-shadow: 0 30px 60px -30px rgb(var(--night-rgb) / 0.6); rotate: -1.2deg; }
+.split .pic img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.split h2 { font-size: clamp(2.2rem, 5.5vw, 3.6rem); letter-spacing: -0.02em; }
+.split .words p:not(.kicker) { margin: 1rem 0 1.75rem; font-size: 1.2rem; color: var(--muted-foreground); max-width: 28rem; }
+@media (max-width: 52rem) { .split .wrap { grid-template-columns: 1fr; } .split .pic { rotate: 0deg; position: static; } }
+
+/* Cards: a service with its photograph, an event, a form. */
+.sec.menu { background: var(--paper-deep); }
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(16rem, 100%), 1fr)); gap: 1.25rem; margin: 0; padding: 0; list-style: none; }
+.card { display: grid; gap: 0.5rem; align-content: start; padding: 1.25rem 1.3rem 1.4rem; border-radius: var(--radius); background: var(--card); box-shadow: 0 0 0 1px var(--line), var(--shadow); transition: translate 0.2s, box-shadow 0.2s; }
+.card:hover { translate: 0 -3px; box-shadow: 0 0 0 1px var(--line), 0 18px 34px -18px rgb(var(--night-rgb) / 0.5); }
+.photo-cards .card { grid-template-rows: auto 1fr; padding: 0; overflow: hidden; gap: 0; }
+.card .pic { aspect-ratio: 4 / 3; background: var(--muted); overflow: hidden; }
+.card .pic img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.card .body { display: grid; gap: 0.45rem; align-content: start; padding: 1.1rem 1.2rem 1.3rem; }
+.card h3 { font-size: 1.5rem; line-height: 1.15; }
+.card h3 a { text-decoration: none; }
+.card h3 a:hover { text-decoration: underline; }
+.card p { margin: 0; color: var(--muted-foreground); }
+.card .meta { font-weight: 700; color: var(--ink); }
+.card .go { margin-top: 0.6rem; }
+.yours ul { margin: 0; padding-left: 1.2rem; }
+.said { padding-bottom: 0.5rem; }
+.landing .banner .fund-box p, .landing .banner .fund-box strong { margin: 0; max-width: none; font-size: 1rem; color: var(--ink); }
+.landing .banner .fund-box strong { font-size: 1.5rem; }
+.banner .fund-box { margin-top: 1.5rem; max-width: 34rem; padding: 1.1rem 1.2rem; border-radius: var(--radius); background: var(--card); color: var(--ink); }
+
+/* The story, over a photograph. */
+.banner { position: relative; isolation: isolate; padding: clamp(5rem, 14vw, 10rem) 0; background: var(--night); color: #fff; overflow: hidden; scroll-margin-top: 4rem; }
+.banner::before { content: ""; position: absolute; inset: 0; z-index: -1; background: linear-gradient(90deg, rgb(var(--shade-rgb) / 0.9) 0%, rgb(var(--shade-rgb) / 0.6) 55%, rgb(var(--shade-rgb) / 0.25) 100%); }
+.banner .kicker { color: var(--glow); }
+.banner h2 { max-width: 14ch; font-size: clamp(2.6rem, 7vw, 5rem); line-height: 0.98; letter-spacing: -0.025em; }
+.banner p:not(.kicker) { margin: 1.1rem 0 0; max-width: 34rem; font-size: 1.2rem; color: var(--on-night); }
+.banner .go { margin-top: 2rem; background: var(--glow); color: var(--on-glow); }
+.banner .go:hover { background: var(--glow-hi); }
+
+/* How it works: three short lines. */
+.how { text-align: center; }
+.how h2.big { margin-bottom: clamp(1.75rem, 4vw, 3rem); }
+.steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem; margin: 0; padding: 0; list-style: none; counter-reset: step; }
+.steps li { counter-increment: step; }
+.steps li::before { content: counter(step); display: grid; place-items: center; width: 4.5rem; height: 4.5rem; margin: 0 auto 1rem; border-radius: 50%; background: var(--glow); color: var(--on-glow); font-family: var(--font-heading); font-style: italic; font-weight: 600; font-size: 2.2rem; }
+.steps h3 { font-size: 1.5rem; }
+.steps p { margin: 0.4rem auto 0; max-width: 16rem; color: var(--muted-foreground); font-size: 1.05rem; }
+@media (max-width: 44rem) { .steps { grid-template-columns: 1fr; gap: 2rem; } }
+
+/* Visit. */
+.visit { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2.5rem; }
+.visit h3 { margin: 0.6rem 0 0.4rem; font-size: 1.4rem; color: #fff; }
+.visit svg { width: 2.2rem; height: 2.2rem; color: var(--glow); }
+.visit p { margin: 0 0 0.4rem; color: var(--on-night-soft); }
+.visit p strong { color: #fff; }
+.visit .tel { font-family: var(--font-heading); font-size: 1.8rem; font-weight: 600; text-decoration: none; color: var(--glow); }
+.visit-cta { margin: clamp(2rem, 5vw, 3.5rem) 0 0; }
+.visit-cta .go { background: var(--glow); color: var(--on-glow); }
+.visit-cta .go:hover { background: var(--glow-hi); }
+@media (max-width: 52rem) { .visit { grid-template-columns: 1fr; gap: 1.75rem; } }
+
+@media (max-width: 48rem) {
+  .hero::before { background: linear-gradient(0deg, rgb(var(--shade-rgb) / 0.92) 0%, rgb(var(--shade-rgb) / 0.6) 55%, rgb(var(--shade-rgb) / 0.3) 100%); }
+  .hero-words { align-self: end; }
+  .hero .actions .go { flex: 1 1 100%; }
+  .hero-strip .wrap { gap: 0.2rem 1.5rem; font-size: 0.95rem; }
+}

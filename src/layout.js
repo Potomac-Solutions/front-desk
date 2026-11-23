@@ -1,124 +1,82 @@
-// The page around the components: the site's frame, its colours, and the connection to the log.
-import { CHART_CSS } from '@potomac-solutions/kit/charts';
+// The page around the components: the head, the bar across the top, the foot, and the connection
+// to the log. One server runs several businesses, so the stylesheets in public/ carry defaults
+// and each page sets its own business's colours and heading typeface over them (`theme`), from
+// `colours` and `look` in src/site.js.
+import { asset, photo, FONT_CSS } from './assets.js';
 
 export const escape = (value) => String(value ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 
-const STYLE = `
-  :root { --foreground: #1f2422; --card: #ffffff; --primary-foreground: #ffffff; --radius: 0.75rem; color-scheme: light; }
-  * { box-sizing: border-box; }
-  body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 1.0625rem; line-height: 1.5; background: var(--background); color: var(--foreground); }
-  a:not(.action-button, .go, .button) { color: inherit; }
-  :focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
-  .concept { margin: 0; padding: 0.45rem 1rem; background: var(--accent); color: #1f1a10; font-size: 0.85rem; font-weight: 600; text-align: center; }
-  .site-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.5rem 1rem; padding: 1rem clamp(1rem, 4vw, 2.5rem); background: var(--primary); color: var(--primary-foreground); }
-  .site-head a { font-size: 1.35rem; font-weight: 800; text-decoration: none; }
-  .site-head span { opacity: 0.85; font-size: 0.9rem; }
-  main { width: min(60rem, 100% - 2 * clamp(1rem, 4vw, 2.5rem)); margin: 0 auto; padding: 2rem 0 3rem; display: grid; gap: 1.75rem; }
-  h1 { margin: 0; font-size: clamp(1.9rem, 5vw, 2.75rem); line-height: 1.1; }
-  h2 { margin: 0; font-size: 1.3rem; }
-  .lede { margin: 0.4rem 0 0; color: var(--muted-foreground); }
-  .go { justify-self: start; padding: 0.55rem 1rem; border-radius: 0.5rem; background: var(--primary); color: var(--primary-foreground); font-weight: 700; text-decoration: none; }
-  .panel { display: grid; gap: 0.9rem; align-content: start; padding: 1.1rem 1.2rem; border-radius: var(--radius); background: var(--card); box-shadow: 0 0 0 1px var(--border); }
-  .panel ul { margin: 0; padding-left: 1.2rem; }
-  .panel.demo { gap: 0.5rem; box-shadow: 0 0 0 2px var(--accent); }
-  .panel.demo p { margin: 0; }
-  .notice { margin: 0; padding: 0.6rem 0.9rem; border-radius: 0.5rem; background: #fde4e1; color: #7a1f17; }
-  .ok { margin: 0; padding: 0.6rem 0.9rem; border-radius: 0.5rem; background: #dff3e6; color: #13472a; }
-  label { display: grid; gap: 0.3rem; font-weight: 600; }
-  input, select, textarea { font: inherit; padding: 0.55rem 0.7rem; border-radius: 0.5rem; border: 1px solid var(--border); background: #fff; color: inherit; }
-  .check { display: flex; gap: 0.5rem; align-items: start; font-weight: 400; }
-  button, .button { font: inherit; font-weight: 700; padding: 0.65rem 1.1rem; border: 0; border-radius: 0.5rem; background: var(--primary); color: var(--primary-foreground); cursor: pointer; text-decoration: none; justify-self: start; }
-  .button.light { background: var(--muted); color: var(--foreground); }
-  table { width: 100%; border-collapse: collapse; }
-  th, td { padding: 0.5rem; text-align: left; border-bottom: 1px solid var(--border); vertical-align: top; }
-  .site-foot { padding: 1.5rem clamp(1rem, 4vw, 2.5rem) 2.5rem; color: var(--muted-foreground); font-size: 0.9rem; }
+/** Small drawings, as inline SVG. Photographs are files in public/photos/, named `<site>-<what>`. */
+export const art = {
+  clock: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
+  pin: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s7-6.200 7-11a7 7 0 0 0-14 0c0 4.800 7 11 7 11z"/><circle cx="12" cy="10" r="2.500"/></svg>',
+  people: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.500"/><path d="M2.500 20a6.500 6.500 0 0 1 13 0M16 4.800a3.500 3.500 0 0 1 0 6.400M18 14.500a6.500 6.500 0 0 1 3.500 5.500"/></svg>',
+};
 
-  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); gap: 1rem; margin: 0; padding: 0; list-style: none; }
-  .card { display: grid; gap: 0.5rem; align-content: start; padding: 1.1rem 1.2rem; border-radius: var(--radius); background: var(--card); box-shadow: 0 0 0 1px var(--border); }
-  .card p { margin: 0; color: var(--muted-foreground); }
-  .card h3 { margin: 0; font-size: 1.1rem; }
-  .meta { font-weight: 700; color: var(--foreground) !important; }
-  .go { justify-self: start; padding: 0.55rem 1rem; border-radius: 0.5rem; background: var(--primary); color: var(--primary-foreground); font-weight: 700; text-decoration: none; }
-  .bulletin { margin: 0; padding: 0.7rem 1rem; border-radius: 0.5rem; background: var(--muted); border-left: 4px solid var(--accent); font-weight: 600; }
-  .fields { display: grid; gap: 0.9rem; }
-  .hint { font-weight: 400; font-size: 0.9rem; color: var(--muted-foreground); }
-  .panel ul.days, .panel free-times ul { padding-left: 0; }
-  .days { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0; padding: 0; list-style: none; }
-  .days a { display: grid; padding: 0.45rem 0.75rem; border-radius: 0.5rem; box-shadow: 0 0 0 1px var(--border); text-decoration: none; background: var(--card); }
-  .days a[aria-current] { box-shadow: 0 0 0 2px var(--primary); font-weight: 700; }
-  .days a small { color: var(--muted-foreground); }
-  .row { display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: end; }
-  .inline { display: inline; }
-  .done { opacity: 0.6; }
-  dl { display: grid; grid-template-columns: max-content 1fr; gap: 0.3rem 1rem; margin: 0; }
-  dt { font-weight: 700; }
-  dd { margin: 0; }
-  .site-head nav { margin-left: auto; display: flex; flex-wrap: wrap; gap: 0.25rem 1rem; }
-  .site-head nav a { font-size: 0.95rem; font-weight: 600; text-decoration: none; opacity: 0.92; }
-  .site-head nav a:hover, .site-head nav a[aria-current] { text-decoration: underline; opacity: 1; }
-  main.wide { width: min(76rem, 100% - 2 * clamp(1rem, 4vw, 2.5rem)); }
-  .hero { display: grid; gap: 1rem; padding: clamp(1.5rem, 5vw, 3rem); border-radius: var(--radius); background: var(--primary); color: #fff; }
-  .hero h1 { font-size: clamp(2.2rem, 6vw, 3.4rem); }
-  .hero .lede { color: rgba(255,255,255,0.86); font-size: 1.15rem; max-width: 42rem; }
-  .hero .actions { display: flex; flex-wrap: wrap; gap: 0.75rem; }
-  .hero .go { background: var(--accent); color: #1f1a10; }
-  .hero .button.light { background: rgba(255,255,255,0.16); color: #fff; }
-  .two { display: grid; grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr)); gap: 1rem; }
-  .stack { display: grid; gap: 0.75rem; }
-  .admin { display: grid; grid-template-columns: 13rem 1fr; gap: 1.5rem; align-items: start; }
-  .admin-nav { position: sticky; top: 1rem; display: grid; gap: 0.15rem; padding: 0.75rem; border-radius: var(--radius); background: var(--card); box-shadow: 0 0 0 1px var(--border); }
-  .admin-nav a { padding: 0.45rem 0.6rem; border-radius: 0.4rem; text-decoration: none; font-weight: 600; }
-  .admin-nav a[aria-current] { background: var(--muted); color: var(--primary); }
-  .admin-nav small { padding: 0.6rem 0.6rem 0.2rem; color: var(--muted-foreground); text-transform: uppercase; letter-spacing: 0.06em; font-size: 0.72rem; }
-  .admin-body { display: grid; gap: 1.25rem; min-width: 0; }
-  @media (max-width: 52rem) { .admin { grid-template-columns: 1fr; } .admin-nav { position: static; grid-auto-flow: column; overflow-x: auto; } .admin-nav small { display: none; } }
-  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); gap: 0.75rem; }
-  .tile { padding: 0.9rem 1rem; border-radius: var(--radius); background: var(--card); box-shadow: 0 0 0 1px var(--border); }
-  .tile span { display: block; color: var(--muted-foreground); font-size: 0.85rem; font-weight: 600; }
-  .tile strong { display: block; font-size: 1.7rem; line-height: 1.2; }
-  .tile small { color: var(--muted-foreground); }
-  .filters { display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: end; }
-  .filters label { font-size: 0.9rem; }
-  .table-wrap { overflow-x: auto; }
-  .badge { display: inline-block; padding: 0.1rem 0.5rem; border-radius: 999px; background: var(--muted); font-size: 0.8rem; font-weight: 700; }
-  .badge.booked { background: #e3eef7; color: #163e5c; }
-  .badge.cancelled, .badge.off { background: #fde4e1; color: #7a1f17; }
-  .badge.past, .badge.handled { background: #dff3e6; color: #13472a; }
-  .muted { color: var(--muted-foreground); }
-  .num { text-align: right; font-variant-numeric: tabular-nums; }
-  .pager { display: flex; gap: 1rem; align-items: center; }
-  .month { margin: 0.5rem 0 0; font-size: 1rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted-foreground); }`;
+const rgb = (hex) => hex.replace('#', '').match(/../g).map((part) => parseInt(part, 16)).join(' ');
+/** This business's colours and type, over the stylesheets' defaults. */
+export function theme(site) {
+  const c = site.colours;
+  const l = site.look;
+  return `:root{--paper:${c.background};--paper-deep:${c.muted};--ink-soft:${c.mutedForeground};--brand:${c.primary};--brand-deep:${l.night};--brand-rgb:${rgb(c.primary)};--night:${l.night};--night-rgb:${rgb(l.night)};--shade-rgb:${rgb(l.shade)};--hot:${l.hot};--hot-ink:${l.hotInk};--hot-rgb:${rgb(l.hot)};--glow:${l.glow};--glow-hi:${l.glowHi};--glow-rgb:${rgb(l.glow)};--on-glow:${l.night};--line:${c.border};--muted:${c.muted};--note:${c.muted};--radius:${l.radius};--font-heading:${l.heading};--soft:${l.soft}}${l.caps ? '.hero h1,.hero .tag,.banner h2,.wordmark b{text-transform:uppercase;letter-spacing:0.01em}' : ''}`;
+}
+/** The business's initials on its own colour: a mark until it has a logo. */
+export const mark = (site) => `<svg viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" fill="${site.look.glow}"/><text x="32" y="43" text-anchor="middle" font-family="Georgia, serif" font-size="30" font-weight="700" fill="${site.look.night}">${escape(site.name.split(/\s+/).slice(0, 2).map((word) => word[0]).join(''))}</text></svg>`;
+export const wordmark = (site, href = '/') => `<a class="wordmark" href="${href}">${mark(site)}<span><b>${escape(site.name.replace(/ (Volunteer Fire Company|Co\.)$/, ''))}</b><small>${escape(site.words.trade)}</small></span></a>`;
 
 /**
  * `nav`: who is looking, for the header's links: `customer` (signed in), `staff` (on the staff).
- * `wide` gives the admin pages more room; `here` marks the current link.
+ * `here` marks the current link. `landing` is the landing page: full-width sections and its own
+ * stylesheet.
  */
-export function layout({ title, site, body, nav = {}, wide = false, here = '' }) {
-  const c = site.colours;
-  const link = (href, words) => `<a href="${href}"${here === href ? ' aria-current="page"' : ''}>${words}</a>`;
+export function layout({ title, site, body, nav = {}, here = '', landing = false }) {
+  const on = site.modules;
+  const link = (href, words, cls = '') => `<a href="${href}"${cls ? ` class="${cls}"` : ''}${here === href ? ' aria-current="page"' : ''}>${words}</a>`;
   const links = [
-    ...(site.modules.appointments ? [link('/#book', 'Book')] : []),
-    ...(site.modules.events ? [link('/events', 'Calendar')] : []),
-    ...(site.modules.giving ? [link('/give', 'Give')] : []),
-    nav.customer ? link('/account', 'Your account') : link('/account/sign-in', 'Sign in'),
+    ...(on.events ? [link('/events', 'Calendar', 'wide')] : []),
+    ...(on.giving ? [link('/give', 'Give', 'wide')] : []),
+    link('/#contact', 'Contact', 'wide'),
+    link('/#visit', 'Visit', 'wide'),
+    nav.customer ? link('/account', 'Account') : link('/account/sign-in', 'Sign in'),
     ...(nav.staff ? [link('/admin', 'Admin')] : []),
   ].join('');
+  const cta = on.appointments ? ['/#book', 'Book now', 'Book'] : on.events ? ['/events', 'What’s on', 'What’s on'] : ['/#contact', 'Get in touch', 'Contact'];
+  const hero = photo(`${site.id}-hero`);
+  const fullTitle = landing ? `${site.name} · ${site.town}` : `${title} · ${site.name}`;
   return `<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex, nofollow">
-  <title>${escape(title)} · ${escape(site.name)}</title>
-  <style>:root { --background: ${c.background}; --border: ${c.border}; --input: ${c.border}; --muted: ${c.muted}; --muted-foreground: ${c.mutedForeground}; --primary: ${c.primary}; --ring: ${c.primary}; --accent: ${c.accent}; }${STYLE}${CHART_CSS}</style>
+  <title>${escape(fullTitle)}</title>
+  <meta name="description" content="${escape(site.about)}">
+  <meta property="og:title" content="${escape(fullTitle)}">
+  <meta property="og:description" content="${escape(site.about)}">
+  <meta name="theme-color" content="${site.look.night}">
+  <link rel="icon" href="${asset('favicon.svg')}" type="image/svg+xml">
+  <link rel="preload" href="${asset('source-sans-3-latin-400-normal.woff2')}" as="font" type="font/woff2" crossorigin>${landing && hero ? `
+  <link rel="preload" href="${hero}" as="image" fetchpriority="high">` : ''}
+  <style>${FONT_CSS}</style>
+  <link rel="stylesheet" href="${asset('base.css')}">
+  <link rel="stylesheet" href="${asset(landing ? 'site.css' : 'customer.css')}">
+  <style>${theme(site)}</style>
 </head>
 <body>
-  <p class="concept">${escape(site.concept)}</p>
-  <header class="site-head"><a href="/">${escape(site.name)}</a><span>${escape(site.town)} · ${escape(site.hours)}</span><nav aria-label="Site">${links}</nav></header>
-  <main${wide ? ' class="wide"' : ''}>
+  <a class="skip" href="#main">Skip to the page</a>
+  <header class="site-head"><div class="wrap bar">${wordmark(site)}<nav aria-label="Site">${links}<a class="bag" href="${cta[0]}"><span class="long">${cta[1]}</span><span class="short">${cta[2]}</span></a></nav></div></header>
+  <main id="main"${landing ? ' class="landing"' : ''}>
     ${body}
   </main>
-  <footer class="site-foot"><a href="/">Home</a>${site.modules.events ? ' · <a href="/events">Calendar</a>' : ''}${site.modules.giving ? ' · <a href="/give">Give</a>' : ''} · <a href="/account">Your account</a> · <a href="/staff">Staff</a> · <a href="/admin">Admin</a></footer>
+  <footer class="site-foot"><div class="wrap">
+    <div class="cols">
+      <div>${wordmark(site)}<p>${escape(site.about)}</p><p>${escape(site.town)}</p></div>
+      <div><h2>Hours</h2><p>${escape(site.hours)}</p></div>
+      <div><h2>Find</h2><ul><li><a href="/">Home</a></li>${on.appointments ? '<li><a href="/#book">Book an appointment</a></li>' : ''}${on.events ? '<li><a href="/events">Calendar</a></li>' : ''}${on.giving ? '<li><a href="/give">Give</a></li>' : ''}<li><a href="/account">Your account</a></li></ul></div>
+      <div><h2>Staff</h2><ul><li><a href="/staff">${on.appointments ? 'The front desk' : 'The office'}</a></li><li><a href="/admin">Admin sign-in</a></li></ul></div>
+    </div>
+    <div class="fine"><p>${escape(site.concept)}</p><p><a href="https://potomac.solutions">Built by Potomac Solutions</a></p></div>
+  </div></footer>
   <script type="module">
     import { connect } from '@zubra/sync/connect';
     connect();
