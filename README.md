@@ -163,6 +163,15 @@ The admin, customer accounts and reports (`test/admin.test.js`, over plain HTTP)
 
 Every behaviour was broken on purpose once to check a test fails (55 of 57 caught, 12 of them the staff and two-business wiring). The two that can't be: a page may write nothing because every collection is the server's, and a booking's later pieces are checked before holding even though the kit's `hold` already refuses the whole run if any piece is taken. Both checks stay as safety belts.
 
+## How it looks
+
+- **Each business looks like itself.** The stylesheets in `public/` carry defaults; every page sets its own business's colours and heading typeface over them, from `colours` and `look` in `src/site.js` (`theme()` in `src/layout.js`). The salon is Cormorant Garamond on green and copper; the fire company is Oswald on red and gold. Body text is Source Sans 3 for both. All three are self-hosted from `@fontsource`.
+- **The landing page** (`/`) is photo-led and built from the modules a business has switched on: a full-screen photograph with the business's name and one line; services as photo cards (appointments); what's coming up (events); the fund over a photograph (giving); its forms; and where to find it. The owner's words (`about`, `notice`, services, the fund) are used as they are; the few words around them are `words` in `src/site.js`. `src/home.js` lays it out.
+- **Photographs** are files in `public/photos/`, named `<site>-<what>` (`desk-hero`, `desk-cut`, `community-engine`), as `.jpg` or `.webp`. A service's photograph is `<site>-<service id>`. Replace a file and restart. The ones here were generated for these made-up businesses; see `public/photos/README.md`.
+- **The staff's side** has its own page frame (`src/shell.js`): a sidebar at a desk; on a phone a bar on top, tabs along the bottom and the sidebar as a sheet. Its links follow the business's modules. Light or dark follows the device, with a switch that remembers. Unhandled messages are counted beside **Inbox**.
+- **Tables** become cards on a phone (`src/tables.js`).
+- **Checks.** With the demo running, `npm run design-check` checks the salon; `SITE=community npm run design-check -- http://127.0.0.1:3000` checks the fire company. Every page, five widths, light and dark.
+
 ## Not yet
 
 - More of the owner's admin: adding services, staff hours, the fund's goal and the forms' fields are still data in `src/site.js` (words, prices and new events are editable).

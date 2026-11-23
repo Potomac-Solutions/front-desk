@@ -26,6 +26,18 @@ export const sites = {
     about: 'Two chairs on Second Street. Book a chair online, any time; we’ll text to confirm.',
     notice: 'Walk-ins welcome on Saturdays when a chair is free.',
     colours: { primary: '#2f4a46', accent: '#c98d5a', background: '#f6f4f0', border: '#d9d4ca', muted: '#ece8e0', mutedForeground: '#5f6662' },
+    // How the public pages look: the dark and the bright beside `colours`, the heading typeface, and
+    // the few words the landing page adds around what the owner edits (`about`, `notice`, services).
+    look: { night: '#17211f', shade: '#0c1211', hot: '#9c4f27', hotInk: '#7c3d1c', glow: '#d39a66', glowHi: '#e3b184', heading: '"Cormorant Garamond", "Iowan Old Style", Georgia, serif', soft: 'italic 600', radius: '0.9rem' },
+    words: {
+      trade: 'Hair, by appointment',
+      tagline: 'A good chair is worth booking.',
+      first: 'Book an appointment',
+      book: { kicker: 'No phone tag', heading: 'Pick a time. We’ll text to confirm.', text: 'See every free slot for the next two weeks, choose who you’d like, and hold it while you fill in the details.' },
+      services: { kicker: 'What we do', lede: 'Prices are where they start; we’ll tell you before we begin if it’ll be more.' },
+      forms: { kicker: 'Something bigger?', heading: 'Get in touch' },
+      visit: 'Two chairs on Second Street. Street parking out front; the door with the copper handle.',
+    },
     modules: { appointments: true, events: false, giving: false },
     // Appointments: each person's chair is a day of 15-minute pieces; a booking takes a run of them.
     slotMinutes: 15,
@@ -73,6 +85,16 @@ export const sites = {
     about: 'Neighbours keeping neighbours safe since 1952. Come to a breakfast, learn CPR, or give to the new engine.',
     notice: 'The hall is closed Thanksgiving week. Breakfast is back the Sunday after.',
     colours: { primary: '#7a1f1f', accent: '#e0b03c', background: '#faf7f2', border: '#e2d7c9', muted: '#f1e9dd', mutedForeground: '#6d5f55' },
+    look: { night: '#1c1414', shade: '#0f0a0a', hot: '#9e2420', hotInk: '#7d1a17', glow: '#e3b23f', glowHi: '#f0c661', heading: '"Oswald", "Arial Narrow", Impact, sans-serif', soft: 'normal 600', radius: '0.4rem', caps: true },
+    words: {
+      trade: 'Volunteer Fire Company',
+      tagline: 'Here when the tones drop.',
+      first: 'See what’s on',
+      events: { kicker: 'At the hall', heading: 'Coming up', text: 'Breakfasts, classes and bingo. Sign up from your phone and we’ll save your place.' },
+      fund: { kicker: 'The engine fund' },
+      forms: { kicker: 'Lend a hand', heading: 'Get in touch' },
+      visit: 'The brick station on Main Street. The hall door is round the side, by the flagpole.',
+    },
     modules: { appointments: false, events: true, giving: true },
     // Events start this many days from the first run, so the demo always has some ahead.
     events: [
