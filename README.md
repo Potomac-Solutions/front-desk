@@ -69,7 +69,7 @@ npm start        # both businesses: the salon at localhost:3000, the fire compan
 npm test         # needs Chrome or Playwright's Chromium
 ```
 
-Node 22.13 or later. `SESSION_SECRET` is required in production, where cookies are `Secure` (and the staff cookie `__Host-`). `DATA_DIR` says where the database files go, one per business. `TENANTS` is the list of businesses, as JSON:
+Node 26. `SESSION_SECRET` is required in production, where cookies are `Secure` (and the staff cookie `__Host-`). `DATA_DIR` says where the database files go, one per business. `TENANTS` is the list of businesses, as JSON:
 
 ```sh
 TENANTS='[{"id":"yough-valley-hair","site":"desk","hosts":["youghvalleyhair.com"]},{"id":"pine-hollow-vfc","site":"community","hosts":["pinehollowvfc.org"]}]'
