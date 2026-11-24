@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Front Desk: one app, two businesses</title>
+<meta name="description" content="Front Desk is one server running two made-up businesses at their own addresses: Yough Valley Hair Co., a salon, and Pine Hollow Volunteer Fire Company. Pick one to visit.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='31' fill='%23231916'/%3E%3Ccircle cx='32' cy='32' r='25.5' fill='none' stroke='%23f1d9cf' stroke-width='1.4'/%3E%3Cpath d='M22 20l10 14 10-14M32 34v12' fill='none' stroke='%23f1d9cf' stroke-width='3.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<style>
+  @font-face { font-family: "Cormorant Garamond"; font-weight: 600; font-display: swap; src: url(assets/cormorant-garamond-latin-600-normal.woff2) format("woff2"); }
+  @font-face { font-family: "Oswald"; font-weight: 600; font-display: swap; src: url(assets/oswald-latin-600-normal.woff2) format("woff2"); }
+  @font-face { font-family: "Source Sans 3"; font-weight: 400; font-display: swap; src: url(assets/source-sans-3-latin-400-normal.woff2) format("woff2"); }
+  @font-face { font-family: "Source Sans 3"; font-weight: 600; font-display: swap; src: url(assets/source-sans-3-latin-600-normal.woff2) format("woff2"); }
+
+  * { box-sizing: border-box; }
+  html { color-scheme: dark; }
+  body { margin: 0; min-height: 100dvh; display: grid; grid-template-rows: auto 1fr auto; background: #120d0c; color: #f3ece8; font: 400 1rem/1.55 "Source Sans 3", system-ui, sans-serif; }
+  a { color: inherit; }
+  :focus-visible { outline: 3px solid #fff; outline-offset: 3px; }
+
+  header { padding: 1.4rem clamp(1rem, 4vw, 2.5rem) 1.2rem; display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 0.4rem 2rem; }
+  header h1 { margin: 0; font-size: 1.05rem; font-weight: 600; }
+  header p { margin: 0; max-width: 44rem; color: #c9bdb8; }
+
+  /* The page is the choice: two doors, side by side, each in its own house style. */
+  main { display: grid; grid-template-columns: 1fr 1fr; }
+  .door { position: relative; isolation: isolate; display: grid; align-content: end; gap: 0.9rem; min-height: min(78dvh, 46rem); padding: clamp(1.5rem, 4vw, 3.25rem); text-decoration: none; overflow: hidden; }
+  .door img.photo { position: absolute; inset: 0; z-index: -2; width: 100%; height: 100%; object-fit: cover; transition: scale 0.6s ease; }
+  .door::before { content: ""; position: absolute; inset: 0; z-index: -1; background: linear-gradient(0deg, var(--shade) 8%, color-mix(in srgb, var(--shade) 55%, transparent) 55%, color-mix(in srgb, var(--shade) 10%, transparent)); }
+  .door:hover img.photo, .door:focus-visible img.photo { scale: 1.035; }
+  .door:focus-visible { outline-offset: -6px; }
+  .door svg { width: 4.25rem; height: auto; }
+  .door h2 { margin: 0; font-family: var(--heading); font-weight: 600; line-height: 1.02; font-size: clamp(2.2rem, 4.4vw, 3.6rem); max-width: 14ch; }
+  .door .tagline { margin: 0; font-size: 1.15rem; color: var(--glow); }
+  .door .what { margin: 0; max-width: 30rem; color: #e8e0dc; }
+  .door .go { justify-self: start; margin-top: 0.4rem; padding: 0.8rem 1.25rem; border-radius: var(--radius); background: var(--hot); color: #fff; font-weight: 600; }
+  .door:hover .go { background: var(--hot-ink); }
+  .door .addr { margin: 0; font-size: 0.92rem; color: #cfc4bf; }
+
+  .salon { --shade: #140d0b; --hot: #9e5a47; --hot-ink: #824636; --glow: #f1d9cf; --radius: 6px; --heading: "Cormorant Garamond", Georgia, serif; }
+  .salon h2 { font-size: clamp(2.5rem, 5vw, 4.1rem); }
+  .hall { --shade: #0f0a0a; --hot: #9e2420; --hot-ink: #7d1a17; --glow: #e3b23f; --radius: 3px; --heading: "Oswald", "Arial Narrow", Impact, sans-serif; }
+  .hall h2 { text-transform: uppercase; letter-spacing: 0.01em; }
+
+  footer { padding: 1.4rem clamp(1rem, 4vw, 2.5rem); display: flex; flex-wrap: wrap; gap: 0.5rem 2rem; justify-content: space-between; font-size: 0.92rem; color: #b5aaa5; }
+  footer p { margin: 0; max-width: 52rem; }
+
+  @media (max-width: 46rem) { main { grid-template-columns: 1fr; } .door { min-height: 70dvh; } }
+  @media (prefers-reduced-motion: reduce) { .door img.photo { transition: none; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>Front Desk</h1>
+  <p>One server, two businesses, each at its own address with its own staff, customers and data. Both are made up. Pick one.</p>
+</header>
+<main>
+  <a class="door salon" href="https://salon.potomac.solutions/">
+    <img class="photo" src="assets/desk-hero.jpg" alt="">
+    <svg viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="31" fill="#231916"/><circle cx="32" cy="32" r="25.5" fill="none" stroke="#f1d9cf" stroke-width="1.4"/><text x="32" y="41" text-anchor="middle" font-family="Cormorant Garamond, Georgia, serif" font-size="26" font-weight="600" fill="#f1d9cf">YV</text></svg>
+    <h2>Yough Valley Hair Co.</h2>
+    <p class="tagline">A good chair is worth booking.</p>
+    <p class="what">A two-chair salon in Oakland, Maryland. See every free slot for two weeks, pick who you’d like, answer a few questions, and hold the time.</p>
+    <span class="go">Book a chair</span>
+    <p class="addr">salon.potomac.solutions</p>
+  </a>
+  <a class="door hall" href="https://fire-company.potomac.solutions/">
+    <img class="photo" src="assets/community-hero.jpg" alt="">
+    <svg viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="31" fill="#1c1414"/><circle cx="32" cy="32" r="25.5" fill="none" stroke="#e3b23f" stroke-width="1.4"/><text x="32" y="41" text-anchor="middle" font-family="Oswald, Arial Narrow, sans-serif" font-size="24" font-weight="600" fill="#e3b23f">PH</text></svg>
+    <h2>Pine Hollow Volunteer Fire Company</h2>
+    <p class="tagline">Here when the tones drop.</p>
+    <p class="what">A volunteer company in a made-up mountain town. Sign up for breakfasts and classes at the hall, give to the new engine fund, or ask to volunteer.</p>
+    <span class="go">See what’s on at the hall</span>
+    <p class="addr">fire-company.potomac.solutions</p>
+  </a>
+</main>
+<footer>
+  <p>Each site has a back office to try: its sign-in page lists a demo owner and staff account. Everything is cleared overnight; nothing is really booked, given or sent.</p>
+  <p><a href="https://github.com/Potomac-Solutions/front-desk">The code is on GitHub.</a> A demo by <a href="https://potomac.solutions/">Potomac Solutions</a></p>
+</footer>
+</body>
+</html>
