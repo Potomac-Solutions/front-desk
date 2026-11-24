@@ -118,3 +118,10 @@
   .hero .actions .go { flex: 1 1 100%; }
   .hero-strip .wrap { gap: 0.2rem 1.5rem; font-size: 0.95rem; }
 }
+
+/* The hero's words sit at the foot of the photograph, and the place is said plainly above the name. */
+.hero-words { align-self: end; }
+.hero .kicker { color: var(--on-night); font-size: 1.05rem; }
+.landing .sec .kicker, .landing .split .kicker { display: none; }
+.hero .go { background: var(--hot); color: #fff; box-shadow: none; }
+.hero .go:hover { background: var(--hot-ink); }

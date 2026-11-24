@@ -25,10 +25,10 @@ export const sites = {
     concept: 'Concept by Potomac Solutions. Yough Valley Hair Co. is a made-up salon; no appointment here is real.',
     about: 'Two chairs on Second Street. Book a chair online, any time; we’ll text to confirm.',
     notice: 'Walk-ins welcome on Saturdays when a chair is free.',
-    colours: { primary: '#2f4a46', accent: '#c98d5a', background: '#f6f4f0', border: '#d9d4ca', muted: '#ece8e0', mutedForeground: '#5f6662' },
+    colours: { primary: '#3a2a25', accent: '#c98f7c', background: '#faf7f5', border: '#e8ddd7', muted: '#f3ece8', mutedForeground: '#6b5b54' },
     // How the public pages look: the dark and the bright beside `colours`, the heading typeface, and
     // the few words the landing page adds around what the owner edits (`about`, `notice`, services).
-    look: { night: '#17211f', shade: '#0c1211', hot: '#9c4f27', hotInk: '#7c3d1c', glow: '#d39a66', glowHi: '#e3b184', heading: '"Cormorant Garamond", "Iowan Old Style", Georgia, serif', soft: 'italic 600', radius: '0.9rem' },
+    look: { night: '#231916', shade: '#140d0b', hot: '#9e5a47', hotInk: '#824636', glow: '#f1d9cf', glowHi: '#f8e8e1', heading: '"Cormorant Garamond", "Iowan Old Style", Georgia, serif', soft: 'italic 600', radius: '0.9rem' },
     words: {
       trade: 'Hair, by appointment',
       tagline: 'A good chair is worth booking.',

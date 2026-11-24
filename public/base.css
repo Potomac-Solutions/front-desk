@@ -5,42 +5,42 @@
 */
 :root {
   /* The defaults, which are the salon's. Each business's own colours and typeface are set per page from src/site.js (see src/layout.js). */
-  --paper: #f6f4f0;
-  --paper-deep: #ece8e0;
-  --ink: #1f2422;
-  --ink-soft: #5a615d;
-  --brand: #2f4a46;
-  --brand-deep: #223633;
-  --brand-rgb: 47 74 70;
-  --night: #17211f;
-  --night-rgb: 23 33 31;
-  --shade-rgb: 12 18 17;
-  --hot: #9c4f27;
-  --hot-ink: #7c3d1c;
-  --hot-rgb: 156 79 39;
-  --glow: #d39a66;
-  --glow-hi: #e3b184;
-  --glow-rgb: 211 154 102;
-  --on-glow: #17211f;
+  --paper: #faf7f5;
+  --paper-deep: #f3ece8;
+  --ink: #231916;
+  --ink-soft: #6b5b54;
+  --brand: #3a2a25;
+  --brand-deep: #231916;
+  --brand-rgb: 58 42 37;
+  --night: #231916;
+  --night-rgb: 35 25 22;
+  --shade-rgb: 20 13 11;
+  --hot: #9e5a47;
+  --hot-ink: #824636;
+  --hot-rgb: 158 90 71;
+  --glow: #f1d9cf;
+  --glow-hi: #f8e8e1;
+  --glow-rgb: 241 217 207;
+  --on-glow: #231916;
   --on-hot: #fff;
-  --on-night: #ece8e0;
-  --on-night-soft: #bfc6c3;
-  --on-night-dim: #8f9895;
-  --line: #d9d4ca;
+  --on-night: #f3ece8;
+  --on-night-soft: #d3c6c0;
+  --on-night-dim: #a5978f;
+  --line: #e8ddd7;
 
   --background: var(--paper);
   --foreground: var(--ink);
   --card: #fffefb;
   --card-foreground: var(--ink);
   --border: var(--line);
-  --input: #b9b3a6;
-  --muted: #ece8e0;
+  --input: #c9b9b1;
+  --muted: #f3ece8;
   --muted-foreground: var(--ink-soft);
   --primary: var(--brand);
   --primary-foreground: #fff;
   --ring: var(--hot);
   --accent: var(--hot);
-  --note: #efe6da;
+  --note: #f5ebe6;
   --radius: 0.9rem;
   --radius-sm: 0.5rem;
 
@@ -208,3 +208,18 @@ tr.done { opacity: 0.6; }
   .site-head, .site-foot, .bagbar, .toast, .skip { display: none !important; }
   body { background: #fff; }
 }
+
+/* A light bar: these pages are airy, so the bar across the top is paper, not night. */
+.site-head { background: rgb(255 255 255 / 0.92); color: var(--ink); box-shadow: 0 1px 0 var(--line); }
+.site-head .wordmark, .site-head nav a:not(.bag) { color: var(--ink); }
+.site-head .wordmark small { color: var(--hot-ink); }
+.site-head nav a:not(.bag):hover, .site-head nav a[aria-current] { background: rgb(var(--brand-rgb) / 0.1); }
+.site-head .bag { background: var(--hot); color: #fff; }
+.site-head .bag:hover { background: var(--hot-ink); }
+
+/* Buttons are small rounded rectangles, not pills, and cards are flat with a hairline. */
+body :is(button:not(.action-button), .button, .go, .bag) { border-radius: 6px; }
+:root { --shadow: none; }
+body { font-size: 1rem; line-height: 1.6; }
+.num, time, .price { font-variant-numeric: tabular-nums; }
+.kicker { text-transform: none; letter-spacing: 0; font-size: 0.98rem; font-weight: 600; }
