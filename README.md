@@ -100,11 +100,11 @@ With `DEMO=1` the server is a demo anyone can try, staff side included (`src/dem
    SESSION_SECRET=<a long random string: openssl rand -base64 48>
    DEMO=1
    TRUST_PROXIES=1
-   TENANTS=[{"id":"yough-valley-hair","site":"desk","hosts":["salon.potomac.solutions"]},{"id":"pine-hollow-vfc","site":"community","hosts":["firehall.potomac.solutions"]}]
+   TENANTS=[{"id":"yough-valley-hair","site":"desk","hosts":["salon.potomac.solutions"]},{"id":"pine-hollow-vfc","site":"community","hosts":["fire-company.potomac.solutions"]}]
    ```
 
-3. Under **Settings → Networking**, add both custom domains, `salon.potomac.solutions` and `firehall.potomac.solutions`. Railway shows a CNAME target for each.
-4. At the DNS host for `potomac.solutions`, add the two CNAME records Railway gave (`salon` and `firehall`), and any TXT record it asks for to verify them. Railway issues the certificates once the records resolve.
+3. Under **Settings → Networking**, add both custom domains, `salon.potomac.solutions` and `fire-company.potomac.solutions`. Railway shows a CNAME target for each.
+4. At the DNS host for `potomac.solutions`, add the two CNAME records Railway gave (`salon` and `fire-company`), and any TXT record it asks for to verify them. Railway issues the certificates once the records resolve.
 5. Open each address. Its staff sign-in page shows its demo sign-ins.
 
 For a real business, leave out `DEMO`, set `DATA_DIR` to a mounted volume (the data must outlive a deploy), and claim each setup link from the deploy log straight away.
