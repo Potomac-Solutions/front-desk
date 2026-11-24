@@ -9,6 +9,19 @@ One server runs several businesses, each at its own web address, each with its o
 
 No appointment, event or gift here is real. Payments are in test mode, and texts and emails aren't sent: the staff page shows each one instead.
 
+## See it live
+
+[![Yough Valley Hair Co. and Pine Hollow Volunteer Fire Company, side by side](docs/assets/preview.jpg)](https://potomac-solutions.github.io/front-desk/)
+
+The same server answers at two addresses, and each one is a different business:
+
+| Business | Live site | What to try |
+| --- | --- | --- |
+| Yough Valley Hair Co. | [salon.potomac.solutions](https://salon.potomac.solutions/) | Book a chair; the back office at `/admin` |
+| Pine Hollow Volunteer Fire Company | [fire-company.potomac.solutions](https://fire-company.potomac.solutions/) | Sign up for an event, give to the engine fund; the back office at `/admin` |
+
+Each site's sign-in page lists a demo owner and staff account. Both are cleared overnight.
+
 ## Try it
 
 `npm install`, then `npm run demo`: it fills both businesses with made-up history and starts them. The salon gets four months of appointments and two weeks ahead; the fire company gets past events with sign-ups, a year of online gifts and sign-ups for what's ahead. It prints the sign-ins, for this machine only:
