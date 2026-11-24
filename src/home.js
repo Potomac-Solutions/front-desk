@@ -5,7 +5,7 @@
 //
 // What the owner edits (`about`, `notice`, services, the fund) comes from the site; the few words
 // around them are `words` in src/site.js; photographs are files in public/photos/, `<site>-<what>`.
-import { escape, art } from './layout.js';
+import { escape, art, mark } from './layout.js';
 import { photo } from './assets.js';
 
 /**
@@ -36,7 +36,7 @@ ${signed.length ? `<section class="panel yours"><h2>You’re signed up</h2><ul>$
 ${
   on.appointments
     ? `<section class="split"><div class="wrap">
-  <div class="pic">${picture('chair', 'An empty chair in front of the mirror')}</div>
+  <div class="pic">${picture('chair', 'An empty chair in front of the mirror')}<span class="seal">${mark(site)}</span></div>
   <div class="words"><p class="kicker">${escape(w.book.kicker)}</p><h2>${escape(w.book.heading)}</h2><p>${escape(w.book.text)}</p><a class="go lg" href="#book">${escape(w.first)}</a></div>
 </div></section>
 <div class="sec menu"><div class="wrap">
@@ -47,7 +47,7 @@ ${
 }${
     on.events
       ? `<section class="split"><div class="wrap">
-  <div class="pic">${picture('breakfast', 'Pancakes and coffee set out on long tables in the hall')}</div>
+  <div class="pic">${picture('breakfast', 'Pancakes and coffee set out on long tables in the hall')}<span class="seal">${mark(site)}</span></div>
   <div class="words"><p class="kicker">${escape(w.events.kicker)}</p><h2>${escape(w.events.heading)}</h2><p>${escape(w.events.text)}</p><a class="go lg" href="/events">The whole calendar</a></div>
 </div></section>
 <div class="sec menu"><div class="wrap"><ul class="cards">${eventCards}</ul></div></div>`

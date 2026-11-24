@@ -125,3 +125,9 @@
 .landing .sec .kicker, .landing .split .kicker { display: none; }
 .hero .go { background: var(--hot); color: #fff; box-shadow: none; }
 .hero .go:hover { background: var(--hot-ink); }
+
+/* The photo is signed with the house's ringed monogram, pressed on like a wax seal over the corner. */
+body .split .pic { position: relative; overflow: visible; }
+body .split .pic img { border-radius: inherit; }
+.split .seal { position: absolute; right: clamp(-1.5rem, -2vw, -0.75rem); bottom: clamp(-1.5rem, -2vw, -0.75rem); width: clamp(4.75rem, 9vw, 7rem); rotate: -9deg; filter: drop-shadow(0 10px 16px rgb(0 0 0 / 0.3)); }
+.split .seal svg { display: block; width: 100%; height: auto; }
