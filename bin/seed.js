@@ -20,17 +20,9 @@ if (process.argv.includes('--fresh')) {
   for (const tenant of tenants) for (const end of ['', '-wal', '-shm']) if (existsSync(join(dataDir, `${tenant.id}.db${end}`))) rmSync(join(dataDir, `${tenant.id}.db${end}`));
 }
 
-export const DEMO = {
-  desk: {
-    owner: { email: 'owner@example.com', name: 'Rosa Dunmore', password: 'yough-owner-demo' },
-    staff: { email: 'jess@example.com', name: 'Jess Calloway', password: 'yough-staff-demo' },
-  },
-  community: {
-    owner: { email: 'owner@example.com', name: 'Dale Pruitt', password: 'pine-hollow-owner-demo' },
-    staff: { email: 'office@example.com', name: 'Wren Abbott', password: 'pine-hollow-staff-demo' },
-  },
-  customer: { email: 'riley@example.com', name: 'Riley Morgan', password: 'front-desk-guest-demo' },
-};
+// The demo sign-ins live in src/demo.js, so the public demo can show and protect them.
+import { DEMO } from '../src/demo.js';
+export { DEMO };
 
 let seed = 20261115;
 const random = () => {
