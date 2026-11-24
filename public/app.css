@@ -2,7 +2,7 @@
   The staff's side: the front desk, the office and the admin. Same business, quieter: denser type, a sidebar, and a dark theme. Loaded after base.css; everything here is under body.staff.
 */
 body.staff {
-  --background: #f2f0eb;
+  --background: #f7f2ef;
   --card: #fffefb;
   --field: #fff;
   --ok-bg: #e2f1e4; --ok-fg: #174a2a;
@@ -16,21 +16,21 @@ body.staff {
 /* Dark: by the system's setting, or by the switch in the sidebar (which wins either way). */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme=light]) body.staff {
-    --background: #111615; --foreground: #e8e6e1; --card: #1a2120; --card-foreground: #e8e6e1; --field: #111615;
-    --border: #313b39; --line: #313b39; --input: #4a5754; --muted: #222b29; --muted-foreground: #aab2af;
+    --background: #15100e; --foreground: #e8e6e1; --card: #1f1815; --card-foreground: #e8e6e1; --field: #15100e;
+    --border: #3d302a; --line: #3d302a; --input: #5a4a42; --muted: #2a211d; --muted-foreground: #b8aca6;
     --primary: var(--glow); --primary-foreground: var(--on-glow); --brand: var(--glow); --brand-deep: var(--glow-hi); --brand-rgb: var(--glow-rgb); --ring: var(--glow);
-    --hot: #e09a6f; --hot-ink: #ebb390; --accent: #e09a6f; --note: #222b29; --ink: #e8e6e1;
+    --hot: #f1d9cf; --hot-ink: #f8e8e1; --accent: #f1d9cf; --note: #2a211d; --ink: #e8e6e1;
     --ok-bg: #153823; --ok-fg: #a9e3bd; --bad-bg: #4a1a15; --bad-fg: #f6b8b0; --info-bg: #17324a; --info-fg: #b3d6f2; --warn-bg: #4a3410; --warn-fg: #f6d58f;
-    --side: #0a0e0d; --shadow: none; color-scheme: dark;
+    --side: #0c0908; --shadow: none; color-scheme: dark;
   }
 }
 :root[data-theme=dark] body.staff {
-    --background: #111615; --foreground: #e8e6e1; --card: #1a2120; --card-foreground: #e8e6e1; --field: #111615;
-    --border: #313b39; --line: #313b39; --input: #4a5754; --muted: #222b29; --muted-foreground: #aab2af;
+    --background: #15100e; --foreground: #e8e6e1; --card: #1f1815; --card-foreground: #e8e6e1; --field: #15100e;
+    --border: #3d302a; --line: #3d302a; --input: #5a4a42; --muted: #2a211d; --muted-foreground: #b8aca6;
     --primary: var(--glow); --primary-foreground: var(--on-glow); --brand: var(--glow); --brand-deep: var(--glow-hi); --brand-rgb: var(--glow-rgb); --ring: var(--glow);
-    --hot: #e09a6f; --hot-ink: #ebb390; --accent: #e09a6f; --note: #222b29; --ink: #e8e6e1;
+    --hot: #f1d9cf; --hot-ink: #f8e8e1; --accent: #f1d9cf; --note: #2a211d; --ink: #e8e6e1;
     --ok-bg: #153823; --ok-fg: #a9e3bd; --bad-bg: #4a1a15; --bad-fg: #f6b8b0; --info-bg: #17324a; --info-fg: #b3d6f2; --warn-bg: #4a3410; --warn-fg: #f6d58f;
-    --side: #0a0e0d; --shadow: none; color-scheme: dark;
+    --side: #0c0908; --shadow: none; color-scheme: dark;
 }
 
 .staff h1 { font-size: clamp(1.7rem, 4vw, 2.2rem); }
@@ -238,3 +238,33 @@ kbd { padding: 0.05rem 0.4rem; border-radius: 0.3rem; background: rgb(255 255 25
 .staff dl { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
 .staff dt, .staff dd { min-width: 0; overflow-wrap: anywhere; }
 @media (max-width: 44rem) { .staff dl { grid-template-columns: 1fr; gap: 0.1rem; } .staff dd { margin-bottom: 0.4rem; } }
+
+/* The back office is a light bar along the top, like the desk's appointment book lying open. */
+body.staff { --side: #fff; --side-fg: var(--ink); }
+:root[data-theme=dark] body.staff { --side-fg: #e8e6e1; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme=light]) body.staff { --side-fg: #e8e6e1; } }
+.side .wordmark, .side .me strong, .side .me a, .topbar, .topbar .wordmark, .topbar a.menu, .side .close, .side .me button, .keys { color: var(--side-fg); }
+.side nav a:hover, .topbar a.menu, .side .close, .side .me button { background: color-mix(in srgb, var(--side-fg) 10%, transparent); }
+.side .me button:hover { background: color-mix(in srgb, var(--side-fg) 18%, transparent); }
+.side .me { border-top-color: color-mix(in srgb, var(--side-fg) 18%, transparent); }
+.side nav small, .side .me span { color: color-mix(in srgb, var(--side-fg) 72%, var(--side)); }
+.side, .topbar { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--side-fg) 12%, transparent); }
+@media (min-width: 56.01rem) {
+  .shell { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 1fr; }
+  .side { z-index: 20; height: auto; overflow: visible; display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 0.5rem 1.5rem; padding: 0.7rem clamp(1rem, 3vw, 2.25rem) 0; }
+  .side .wordmark { grid-area: 1 / 1; }
+  .side .me { grid-area: 1 / 2; margin: 0; padding: 0; border: 0; display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 0.3rem 1.1rem; }
+  .side .me p { display: flex; align-items: baseline; gap: 0.5rem; }
+  .side .me .row { margin: 0; }
+  .side nav { grid-area: 2 / 1 / 3 / -1; display: flex; flex-wrap: wrap; gap: 0.15rem; }
+  .side nav small, .side .keys { display: none; }
+  .side nav a { padding: 0.6rem 0.85rem; }
+  .staff main { margin-inline: auto; width: 100% !important; }
+}
+.side .wordmark small { color: var(--hot-ink); }
+:root[data-theme=dark] .side .wordmark small { color: var(--glow); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme=light]) .side .wordmark small { color: var(--glow); } }
+.side nav a { border-radius: 6px; }
+.side nav a[aria-current] { background: var(--primary); color: var(--primary-foreground); }
+.keys summary { color: inherit; }
+@media (min-width: 56.01rem) { .side { padding-bottom: 0.6rem; } }
