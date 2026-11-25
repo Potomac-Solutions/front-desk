@@ -1,6 +1,6 @@
 # Front Desk and Community
 
-For the businesses and groups whose website is mostly a front desk: book an appointment, fill in a form, see what's on, sign up, give. Lawyers, insurance agents, accountants, salons and barbers, vets and daycares on one side; churches, volunteer fire companies, clubs, youth leagues, museums and libraries on the other. One app: a site switches on the modules it needs. A Potomac Solutions platform, built on the [kit](https://github.com/Potomac-Solutions/kit) and [Zubra](https://github.com/zubra-js/zubra).
+For the businesses and groups whose website is mostly a front desk: book an appointment, fill in a form, see what's on, sign up, give. Lawyers, insurance agents, accountants, salons and barbers, vets and daycares on one side; churches, volunteer fire companies, clubs, youth leagues, museums and libraries on the other. One app: a site switches on the modules it needs. A Potomac Solutions platform, built on the Potomac kit and [Zubra](https://github.com/zubra-js/zubra).
 
 One server runs several businesses, each at its own web address, each with its own data and its own staff. It starts with two, both made up:
 
@@ -64,7 +64,7 @@ Without JavaScript (turn it off in the browser's settings), all of it works the 
 
 | Piece | Job |
 | --- | --- |
-| [Potomac kit](https://github.com/Potomac-Solutions/kit) (private) | `hold` (each chair's day in 15-minute pieces, held while you fill in the details, then booked, and given back with `free` when cancelled; each event's places, all of a party or none), `pay` (gifts, test provider, charged once), `notify` (confirmations, kept in an outbox here), `staff` (each business's owner and staff: passwords, sessions, invites, resets, roles), `tenant` and `tenancy` (the business from the host name, and its own log), `auth` (guests), `store` (the Sync log) |
+| Potomac kit (private) | `hold` (each chair's day in 15-minute pieces, held while you fill in the details, then booked, and given back with `free` when cancelled; each event's places, all of a party or none), `pay` (gifts, test provider, charged once), `notify` (confirmations, kept in an outbox here), `staff` (each business's owner and staff: passwords, sessions, invites, resets, roles), `tenant` and `tenancy` (the business from the host name, and its own log), `auth` (guests), `store` (the Sync log) |
 | `@zubra/server` | Renders every page before any JavaScript runs |
 | `@zubra/sync` | Each business's log (one SQLite file each). Which pieces of each chair are taken, each event's places left and the fund's total are documents only the server writes; pages follow them live, and never read who booked, signed up or gave |
 | `src/site.js` | The two sites as data: modules switched on, staff and their hours, services with their questions, events, the fund, and every form's fields |
