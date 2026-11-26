@@ -55,10 +55,26 @@ The day sheet (`/staff`) is still where the desk works through today.
 **The fire company** (http://127.0.0.1:3000)
 
 1. **Sign up.** Open the CPR class and sign up for three places. The calendar in the other window counts down from 12 to 9, live. Cancel, and they're back.
-2. **Give.** Give to the engine fund with any card number (`4000 0000 0000 0002` is declined, to see that). The total on the home page moves in every open window.
+2. **Give.** Give to the engine fund on PayPal's page (until PayPal is set up, the kit's test page: press **Pay**, or go back without paying). The total on the home page moves in every open window.
 3. **Volunteer.** Send the volunteer form; the office sees it in the inbox.
 
 Without JavaScript (turn it off in the browser's settings), all of it works the same.
+
+## Paying
+
+The customer pays on **PayPal**: the card is typed there, never here. Gifts to the fire company's engine fund go to PayPal, and count once PayPal says they're paid. Backing out gives nothing. The salon takes no money online (people pay at their visit), so it has nothing to change. PayPal takes the money when the customer comes back (or the webhook comes), not on its own page.
+
+Until PayPal's settings are on the server, the kit's test page stands in. It is plainly a test, with no card and no money, and makes the same trip there and back. To use PayPal's test mode, set these on Railway:
+
+| Setting | What |
+| --- | --- |
+| `PAY_PAYPAL_CLIENT`, `PAY_PAYPAL_SECRET` | A sandbox REST app's client id and secret (developer.paypal.com → Apps & Credentials, Sandbox) |
+| `PAY_PAYPAL_SANDBOX` | `1` |
+| `PAY_PAYPAL_WEBHOOK_ID` | Optional: a webhook for `CHECKOUT.ORDER.APPROVED` and `PAYMENT.CAPTURE.COMPLETED` at `https://fire-company.potomac.solutions/pay/webhook`, and its id |
+
+`PAY_PROVIDER` picks another platform instead (`stripe`, `square`, `paypal`, `helcim`), with its own settings as in the kit's README. Nothing else changes. Keep the public demo on test keys: with live ones, real money moves.
+
+`SESSION_SECRET` must be at least 32 characters now (the kit refuses a shorter one).
 
 ## How it is put together
 
@@ -142,7 +158,7 @@ The fire company (`test/community.test.js`):
 1. Without JavaScript: the calendar; an open event needs no sign-up; signing up for places, once; the office sees who's coming; cancelling gives the places back.
 2. Places run out: never more than a party's limit or than are left; two parties for the last places at once, one gets in; no place is given twice; a double press signs up once.
 3. Places left are live on every open calendar.
-4. Giving: a declined card gives nothing; a gift is charged once even when pressed twice; the total moves live; amounts and names are checked, and a gift's page can't be reused by someone else.
+4. Giving: backing out of the payment page gives nothing; on PayPal (faked) a gift is approved there and taken once on the way back, and backed out first, PayPal is never told to take it; a gift is charged once even when pressed twice; the total moves live; amounts and names are checked, and a gift's page can't be reused by someone else.
 5. The volunteer form needs its tick box and a real choice; the hall form's numbers are checked.
 6. A page reads the events and the fund and nothing else; it writes nothing; the fire company has no appointments.
 

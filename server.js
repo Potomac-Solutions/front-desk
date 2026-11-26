@@ -3,7 +3,8 @@
 // - Appointments: choose a service, who, a day and a time; the time is held while the guest
 //   fills in the details, then booked; free times grey out live on every page.
 // - Events: a calendar, with places that count down live as people sign up.
-// - Giving: a fund whose total moves live with every gift (test-mode payments).
+// - Giving: a fund whose total moves live with every gift, paid on PayPal's page (the kit's test
+//   page until PayPal is set up).
 // - Forms: an enquiry, a quote request or a sign-up sheet, to the staff inbox.
 // - Every form is a plain post to a route here, so it all works without JavaScript.
 // - One server runs several businesses, each chosen by the request's host name (the kit's
@@ -27,6 +28,7 @@ import { createTenants } from '@potomac-solutions/kit/tenant';
 import { createTenancy } from '@potomac-solutions/kit/tenancy';
 import { createDesk, deskSync, CONTACT, timeLabel, dateLabel } from './src/desk.js';
 import { sites } from './src/site.js';
+import { createPayments } from './src/payments.js';
 import { layout, escape } from './src/layout.js';
 import { shell } from './src/shell.js';
 import { landing } from './src/home.js';
@@ -67,20 +69,26 @@ export async function createApp({
   proxies = Number(process.env.TRUST_PROXIES ?? 0),
   // The public demo (src/demo.js): the seeded businesses, with their sign-ins shown and protected.
   demo = process.env.DEMO === '1',
+  // Paying: PAY_PROVIDER and its settings (src/payments.js). Tests pass their own.
+  payEnv = process.env,
+  payFetch,
 } = {}) {
   if (!secret) {
     if (process.env.NODE_ENV === 'production') throw new Error('Set SESSION_SECRET.');
-    secret = 'front-desk-development-only';
+    secret = 'front-desk-development-only-not-a-real-secret';
   }
   for (const tenant of tenants) if (!sites[tenant.site]) throw new TypeError(`${tenant.id}: no site called ${tenant.site}`);
   const directory = createTenants({ tenants });
   // Each business: its own log (a SQLite file), its desk and its staff, opened the first time
   // it's asked for.
+  // PayPal is the platform for gifts (the fire company's engine fund); until its settings are on
+  // the server, the kit's test page stands in. One for the server: each business keeps its own payments.
+  const payments = createPayments({ env: payEnv, intended: 'paypal', fetch: payFetch });
   const tenancy = createTenancy({
     tenants: directory,
     open: (tenant) => deskSync({ db: dataDir === ':memory:' ? ':memory:' : join(dataDir, `${tenant.id}.db`) }),
     setup: async ({ tenant, sync, store }) => {
-      const desk = await createDesk({ sync, store, site: tenant.site, now, holdMs });
+      const desk = await createDesk({ sync, store, site: tenant.site, now, holdMs, provider: payments.provider });
       const staff = createStaff({ store, secure, now, ...(staffCost ? { cost: staffCost } : {}) });
       // Customers who make an account (kit/customers), in the business's own log.
       const customers = createCustomers({ store, secure, now, ...(staffCost ? { cost: staffCost } : {}) });
@@ -250,8 +258,8 @@ ${note(url)}
   <div class="row">${site.givingAmounts.map((cents, i) => `<label class="check"><input type="radio" name="amount" value="${cents}"${i === 1 ? ' checked' : ''}> ${plainDollars(cents)}</label>`).join('')}</div>
   <label for="f-other">Or another amount, in dollars<input id="f-other" name="other" inputmode="decimal" maxlength="12"></label></fieldset>
   ${fields([{ name: 'name', label: 'Your name', type: 'text', required: true }, { name: 'email', label: 'Email, for a receipt', type: 'email' }])}
-  <label for="f-card">Card number<span class="hint">Test mode: nothing is charged. Any number works; 4000 0000 0000 0002 is declined.</span><input id="f-card" name="card" inputmode="numeric" autocomplete="cc-number" required></label>
-  <button type="submit">Give</button>
+  <p class="hint">${escape(payments.line)}</p>
+  <button type="submit">Continue to give</button>
 </form>`;
   }
 
@@ -311,6 +319,27 @@ ${sheet.map((one) => `<h3>${escape(one.name)}</h3>${one.appointments.length ? `<
     const staffHere = () => STAFF_LINKS.filter((href) => url.pathname === href || url.pathname.startsWith(`${href}/`)).sort((a, b) => b.length - a.length)[0] ?? '';
     const show = (p, title, body, { wide = false, ...options } = {}) => (wide ? shellPage(res, p, title, body, { here: staffHere(), ...options }) : page(res, p, title, body, { nav, ...options }));
     if (url.pathname.startsWith('/account') || url.pathname.startsWith('/admin')) res.setHeader('cache-control', 'no-store');
+    // Paying a gift on the platform's page: the test page, the way back, backing out, and the webhook.
+    if (on.giving) {
+      if (await payments.testRoute(req, res, url, readForm)) return;
+      if ((url.pathname === '/pay/back' || url.pathname === '/pay/cancel') && req.method === 'GET') {
+        const key = url.searchParams.get('gift') ?? '';
+        const done = url.pathname === '/pay/back' ? await desk.finishGift(key) : await desk.cancelGift(guest, key);
+        return back(res, done.ok ? withDone('/give', `Thank you for your gift of ${dollars(done.cents)}.`) : withProblem('/give', done));
+      }
+      if (url.pathname === '/pay/told' && req.method === 'POST') {
+        const form = await readForm(req);
+        if (!form) return send(res, 413, 'Too large');
+        const done = await desk.finishGift(String(form.get('gift') ?? ''), { told: String(form.get('told') ?? '') });
+        return back(res, done.ok ? withDone('/give', `Thank you for your gift of ${dollars(done.cents)}.`) : withProblem('/give', done));
+      }
+      if (url.pathname === '/pay/webhook' && req.method === 'POST') {
+        const request = await payments.webhook(req, origin(req));
+        if (!request) return send(res, 413, 'Too large');
+        const heard = await desk.heardGift(request);
+        return send(res, heard.error === 'bad-signature' ? 401 : 200, heard.error === 'bad-signature' ? 'Bad signature' : 'ok');
+      }
+    }
     if (req.method === 'POST') {
       // Every form is ours: another site's post is refused (the cookies are SameSite=Lax too).
       if (req.headers['sec-fetch-site'] === 'cross-site') return send(res, 403, 'Forbidden');
@@ -347,7 +376,8 @@ ${sheet.map((one) => `<h3>${escape(one.name)}</h3>${one.appointments.length ? `<
         return back(res, done.ok ? withDone(`/r/${unsigning[1]}`, 'Cancelled. The places are back for someone else.') : withProblem(`/r/${unsigning[1]}`, done));
       }
       if (on.giving && path === '/give') {
-        const done = await desk.give(guest, form);
+        const done = await desk.give(guest, form, { back: `${origin(req)}/pay/back`, cancel: `${origin(req)}/pay/cancel` });
+        if (done.paying) return payments.send(res, done.pay, { cancel: `/pay/cancel?gift=${done.key}`, fields: { gift: done.key } });
         return back(res, done.ok ? withDone('/give', `Thank you for your gift of ${dollars(done.cents)}.`) : withProblem('/give', done));
       }
       const sending = path.match(/^\/forms\/([a-z-]+)$/);
@@ -593,7 +623,7 @@ ${sheet.map((one) => `<h3>${escape(one.name)}</h3>${one.appointments.length ? `<
     }
     return links;
   }
-  return Object.assign(server, { tenancy, open, demo, business: (id) => tenancy.spaceOf(id) });
+  return Object.assign(server, { tenancy, open, demo, payments, business: (id) => tenancy.spaceOf(id) });
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

@@ -97,7 +97,7 @@ export async function deskSync({ db = ':memory:' } = {}) {
   return createSyncServer({
     log: await sqliteLog(db),
     authorize: serverOnly(
-      [...SERVER_ONLY, 'slots', 'slot-holds', 'busy', 'pending', 'appointments', 'events', 'places', 'place-holds', 'rsvps', 'funds', 'gifts', 'inbox', 'messages', 'settings', 'audit'],
+      [...SERVER_ONLY, 'slots', 'slot-holds', 'busy', 'pending', 'appointments', 'events', 'places', 'place-holds', 'rsvps', 'funds', 'gifts', 'giving', 'inbox', 'messages', 'settings', 'audit'],
       ({ kind }) => kind === 'read',
     ),
     scope: () => ({ busy: true, events: true, funds: true }),
@@ -108,7 +108,7 @@ export async function deskSync({ db = ':memory:' } = {}) {
  * A business's front desk, on its own log: `sync` and `store` when the kit's tenancy opened them,
  * or a log of its own at `db`.
  */
-export async function createDesk({ db = ':memory:', sync, store, site: siteId = 'desk', now = Date.now, holdMs } = {}) {
+export async function createDesk({ db = ':memory:', sync, store, site: siteId = 'desk', now = Date.now, holdMs, provider = testProvider() } = {}) {
   const given = typeof siteId === 'string' ? sites[siteId] : siteId;
   if (!given) throw new TypeError(`No site called ${siteId}`);
   // Each business gets its own copy, so one owner's settings never reach another business.
@@ -120,7 +120,9 @@ export async function createDesk({ db = ':memory:', sync, store, site: siteId = 
 
   const chairs = createHolds({ store, holdMs, ceilingMs: 3 * holdMs, max: 24, names: { units: 'slots', holders: 'slot-holds' }, now });
   const places = createHolds({ store, holdMs: 60_000, max: site.partyMax ?? 8, names: { units: 'places', holders: 'place-holds' }, now });
-  const pay = createPay({ provider: testProvider(), store, now });
+  // Gifts are paid on the platform's page (PayPal, for the fire company). `giving/<key>` is a gift
+  // while the giver is there; `wanted` lets the platform take the money only while it is.
+  const pay = createPay({ provider, store, now, wanted: (id) => store.get('giving', String(id).split('/')[1])?.state === 'paying' });
   const notify = createNotify({
     // The concept sends nothing: each message is kept, and the staff page shows them.
     send: async (message) => (await store.write('messages', newKey('s'), { ...message, at: now() }), { ok: true }),
@@ -427,7 +429,7 @@ export async function createDesk({ db = ':memory:', sync, store, site: siteId = 
     // ---- Giving ---------------------------------------------------------------------------------
     fund: () => (on.giving ? { id: site.fund.id, ...store.get('funds', site.fund.id) } : null),
     /** A gift, charged once even if the button is pressed twice (the key is made with the page). */
-    async give(guest, form) {
+    async give(guest, form, { back = '', cancel = '' } = {}) {
       if (!on.giving || !guest) return { error: 'Open the giving page again.' };
       const key = String(form.get('gift') ?? '');
       if (!keyOf('g').test(key)) return { error: 'Open the giving page again.' };
@@ -438,6 +440,15 @@ export async function createDesk({ db = ':memory:', sync, store, site: siteId = 
       if (!Number.isInteger(cents) || cents < 100 || cents > 1_000_000) return { error: 'Choose an amount from $1 to $10,000.' };
       const read = readFields([{ name: 'name', label: 'Your name', type: 'text', required: true }, { name: 'email', label: 'Email', type: 'email' }], form);
       if (read.error) return read;
+      if (back) {
+        const waiting = store.get('giving', key);
+        if (waiting && waiting.owner !== guest.pub) return { error: 'Open the giving page again.' };
+        if (!waiting || waiting.state !== 'paying') await store.write('giving', key, { state: 'paying', cents, name: read.values.name, email: read.values.email, owner: guest.pub, customer: guest.customer ?? '', at: now() });
+        const started = await pay.start({ id: `gift/${key}`, cents: store.get('giving', key).cents, description: site.fund.title, back: `${back}?gift=${key}`, cancel: cancel ? `${cancel}?gift=${key}` : '' });
+        if (started.error === 'paid') return this.finishGift(key);
+        if (!started.ok) return { error: 'Giving online isn’t working right now. Try again later.' };
+        return { ok: true, key, paying: true, pay: started.url ? { url: started.url } : { frame: started.frame, ref: started.ref } };
+      }
       const paid = await pay.pay({ id: `gift/${key}`, cents, method: { card: String(form.get('card') ?? '') }, description: `${site.fund.title} (test mode)` });
       if (!paid.ok) return { error: paid.error === 'declined' ? 'That card was declined. Try another.' : paid.error === 'in-progress' ? 'Your gift is already going through.' : 'That didn’t go through. Try again.' };
       await store.write('gifts', key, { fund: site.fund.id, cents, name: read.values.name, email: read.values.email, ref: paid.ref, owner: guest.pub, customer: guest.customer ?? '', at: now() });
@@ -446,6 +457,42 @@ export async function createDesk({ db = ':memory:', sync, store, site: siteId = 
       if (read.values.email) await notify.notify({ email: read.values.email }, 'thanks', { name: read.values.name, amount: `$${(cents / 100).toFixed(2)}`, fund: site.fund.title });
       return { ok: true, cents };
     },
+    /** Back from the platform's page, or its webhook: once it's paid, the gift counts, once. */
+    async finishGift(key, { told } = {}) {
+      const waiting = keyOf('g').test(key ?? '') ? store.get('giving', key) : null;
+      const given = waiting && store.get('gifts', key);
+      if (given) return { ok: true, again: true, cents: given.cents };
+      if (waiting?.state !== 'paying') return { error: waiting ? 'Nothing was charged.' : 'Open the giving page again.' };
+      const settled = await pay.settle({ id: `gift/${key}`, ...(told ? { ref: pay.paid(`gift/${key}`)?.ref, told } : {}) });
+      if (settled.error === 'not-paid') return { error: 'That payment didn’t go through, so nothing was charged.' };
+      if (!settled.ok) return { error: 'That didn’t go through. Try again.' };
+      if (settled.again || store.get('gifts', key)) return { ok: true, again: true, cents: waiting.cents };
+      // Marked given before any await, so a second way of hearing finds it done.
+      const done = store.write('giving', key, { state: 'given', at: now() });
+      const gift = store.write('gifts', key, { fund: site.fund.id, cents: waiting.cents, name: waiting.name, email: waiting.email, ref: settled.ref, owner: waiting.owner, customer: waiting.customer, at: now() });
+      const fund = store.get('funds', site.fund.id);
+      await Promise.all([done, gift, store.write('funds', site.fund.id, { raised: fund.raised + waiting.cents, gifts: fund.gifts + 1 })]);
+      if (waiting.email) await notify.notify({ email: waiting.email }, 'thanks', { name: waiting.name, amount: `$${(waiting.cents / 100).toFixed(2)}`, fund: site.fund.title });
+      return { ok: true, cents: waiting.cents };
+    },
+
+    /** The webhook from the platform: `{ headers, body, url }`. */
+    async heardGift(request) {
+      const settled = await pay.heard(request);
+      const key = String(settled.id ?? '').split('/')[1];
+      return settled.ok && key ? this.finishGift(key) : settled;
+    },
+
+    /** Backed out of the platform's page: nothing given, and the platform isn't told to take it afterwards. */
+    async cancelGift(guest, key) {
+      const waiting = keyOf('g').test(key ?? '') ? store.get('giving', key) : null;
+      if (!guest || waiting?.owner !== guest.pub) return { error: 'Open the giving page again.' };
+      const done = await this.finishGift(key);
+      if (done.ok) return done;
+      await store.write('giving', key, { state: 'let-go', at: now() });
+      return { error: 'Nothing was charged.' };
+    },
+
     gifts: () => store.under('gifts').sort((a, b) => b.at - a.at),
 
     // ---- Forms and the inbox ------------------------------------------------------------------------

@@ -35,7 +35,7 @@ before(async () => {
     ],
     dataDir: dir,
     cache: false,
-    secret: 'test',
+    secret: 'test-only-secret-that-is-long-enough-1234',
     staffCost: STAFF_COST,
   });
   links = await server.open();
