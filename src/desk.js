@@ -9,7 +9,7 @@
 //   slots/appt/<staff>/<day>/<HHMM>   a 15-minute piece of someone's chair      (kit hold)
 //   busy/<day>                        { taken: { <staff>: [HHMM…] } }: live, so free times grey out
 //   pending/<guest>                   the time a guest is holding while they fill in the details
-//   appointments/<key>                a booking: service, who, when, the answers; booked or cancelled
+//   appointments/<key>                a booking: service, who, when, the answers; paying (a deposit), booked, cancelled or let go
 //   events/<key>                      an event, and how many places are left (live)
 //   places/event/<key>/p<n>           one place at an event                      (kit hold)
 //   rsvps/<key>                       a sign-up: who, how many, which places
@@ -97,7 +97,7 @@ export async function deskSync({ db = ':memory:' } = {}) {
   return createSyncServer({
     log: await sqliteLog(db),
     authorize: serverOnly(
-      [...SERVER_ONLY, 'slots', 'slot-holds', 'busy', 'pending', 'appointments', 'events', 'places', 'place-holds', 'rsvps', 'funds', 'gifts', 'inbox', 'messages', 'settings', 'audit'],
+      [...SERVER_ONLY, 'slots', 'slot-holds', 'busy', 'pending', 'appointments', 'events', 'places', 'place-holds', 'rsvps', 'funds', 'gifts', 'giving', 'inbox', 'messages', 'settings', 'audit'],
       ({ kind }) => kind === 'read',
     ),
     scope: () => ({ busy: true, events: true, funds: true }),
@@ -108,7 +108,7 @@ export async function deskSync({ db = ':memory:' } = {}) {
  * A business's front desk, on its own log: `sync` and `store` when the kit's tenancy opened them,
  * or a log of its own at `db`.
  */
-export async function createDesk({ db = ':memory:', sync, store, site: siteId = 'desk', now = Date.now, holdMs } = {}) {
+export async function createDesk({ db = ':memory:', sync, store, site: siteId = 'desk', now = Date.now, holdMs, provider = testProvider() } = {}) {
   const given = typeof siteId === 'string' ? sites[siteId] : siteId;
   if (!given) throw new TypeError(`No site called ${siteId}`);
   // Each business gets its own copy, so one owner's settings never reach another business.
@@ -120,7 +120,21 @@ export async function createDesk({ db = ':memory:', sync, store, site: siteId = 
 
   const chairs = createHolds({ store, holdMs, ceilingMs: 3 * holdMs, max: 24, names: { units: 'slots', holders: 'slot-holds' }, now });
   const places = createHolds({ store, holdMs: 60_000, max: site.partyMax ?? 8, names: { units: 'places', holders: 'place-holds' }, now });
-  const pay = createPay({ provider: testProvider(), store, now });
+  // Gifts are paid on the platform's page (PayPal, for the fire company). `giving/<key>` is a gift
+  // while the giver is there; `wanted` lets the platform take the money only while it is.
+  // A colour's deposit is paid there too (Clover, for the salon): `appointments/<key>` waits as
+  // 'paying', the chair already its, until the platform says the deposit is in.
+  const pay = createPay({
+    provider,
+    store,
+    now,
+    wanted: (id) => {
+      const [kind, key] = String(id).split('/');
+      return kind === 'deposit' ? store.get('appointments', key)?.status === 'paying' : store.get('giving', key)?.state === 'paying';
+    },
+  });
+  // How long a deposit's page may be open before the time is let go: Clover's lasts 15 minutes.
+  const PAYING_MS = 30 * 60_000;
   const notify = createNotify({
     // The concept sends nothing: each message is kept, and the staff page shows them.
     send: async (message) => (await store.write('messages', newKey('s'), { ...message, at: now() }), { ok: true }),
@@ -211,6 +225,15 @@ export async function createDesk({ db = ':memory:', sync, store, site: siteId = 
 
   const appointmentWords = (appt) => ({ what: `${service(appt.service)?.name.toLowerCase()} with ${person(appt.staff)?.name}`, when: `${dateLabel(appt.date)} at ${timeLabel(appt.time)}` });
 
+  /** A deposit that never came: the chair's pieces go back and the appointment is let go. */
+  async function letDepositGo(key, why) {
+    const appt = store.get('appointments', key);
+    if (appt?.status !== 'paying') return;
+    await store.write('appointments', key, { status: 'let-go', why, cancelledAt: now() });
+    await chairs.free(appt.owner, appt.pool, appt.units);
+    await refreshBusy(appt.date);
+  }
+
   // ---- Events ------------------------------------------------------------------------------------
   const eventPool = (key) => `event/${key}`;
   const placeIds = (event) => Array.from({ length: event.capacity ?? 0 }, (_, i) => `p${i + 1}`);
@@ -286,7 +309,7 @@ export async function createDesk({ db = ':memory:', sync, store, site: siteId = 
      * Book the held time with the guest's details and the service's questions. A hold that ran
      * out is still booked if nobody took the time meanwhile.
      */
-    async book(guest, form) {
+    async book(guest, form, { back = '', cancel = '' } = {}) {
       const mine = guest && store.get('pending', guest.pub);
       if (!mine?.service) return { error: 'Choose a time first.', back: '/' };
       const svc = service(mine.service);
@@ -305,12 +328,59 @@ export async function createDesk({ db = ':memory:', sync, store, site: siteId = 
       if (confirmed.error) return { error: 'That time has gone. Choose another.', back: `/book/${svc.id}?date=${mine.date}` };
       const key = newKey('a');
       const { name, phone, email } = read.values;
-      const appt = { service: svc.id, staff: mine.staff, date: mine.date, time: mine.time, minutes: svc.minutes, cents: svc.cents ?? 0, pool: mine.pool, units: mine.units, name, phone, email, answers: read.answers.slice(3 - (email ? 0 : 1)), owner: guest.pub, customer: guest.customer ?? '', status: 'booked', at: now() };
+      const deposit = svc.deposit && back ? svc.deposit : 0;
+      const appt = { service: svc.id, staff: mine.staff, date: mine.date, time: mine.time, minutes: svc.minutes, cents: svc.cents ?? 0, pool: mine.pool, units: mine.units, name, phone, email, answers: read.answers.slice(3 - (email ? 0 : 1)), owner: guest.pub, customer: guest.customer ?? '', status: deposit ? 'paying' : 'booked', deposit, at: now() };
       await store.write('appointments', key, appt);
       await store.write('pending', guest.pub, { service: '' });
       await refreshBusy(mine.date);
-      await tell(read.values, 'booked', { name, ...appointmentWords(appt) });
+      if (!deposit) {
+        await tell(read.values, 'booked', { name, ...appointmentWords(appt) });
+        return { ok: true, key };
+      }
+      // The chair is the guest's while they pay; booked once the platform says the deposit is in.
+      const words = appointmentWords(appt);
+      const started = await pay.start({ id: `deposit/${key}`, cents: deposit, description: `Deposit: ${svc.name}, ${words.when}`, back: `${back}?appt=${key}`, cancel: cancel ? `${cancel}?appt=${key}` : '', email });
+      if (!started.ok) {
+        await letDepositGo(key, 'not-started');
+        return { error: 'Taking deposits isn’t working right now, so the time wasn’t booked. Try again later, or call us.', back: `/book/${svc.id}?date=${mine.date}` };
+      }
+      return { ok: true, key, paying: true, pay: started.url ? { url: started.url } : { frame: started.frame, ref: started.ref } };
+    },
+
+    /**
+     * Back from the deposit's page, or its webhook: once the deposit is in, the appointment is
+     * booked, once. `waiting` while the platform hasn't said yet (Clover tells by its webhook).
+     * A deposit that comes in after the time was let go is given back.
+     */
+    async finishDeposit(key) {
+      const appt = keyOf('a').test(key ?? '') ? store.get('appointments', key) : null;
+      if (!appt?.deposit) return { error: 'That isn’t one of your appointments.' };
+      if (appt.status === 'booked') return { ok: true, again: true, key };
+      const settled = await pay.settle({ id: `deposit/${key}` });
+      if (appt.status !== 'paying') {
+        // Paid after the time was let go (heard by the webhook, or on the way back): give it back, once.
+        const record = settled.ok && pay.paid(`deposit/${key}`);
+        if (record && !record.refunded && !record.refunding) await pay.refund({ id: `deposit/${key}` });
+        return { error: 'That time was let go, so the deposit wasn’t kept.' };
+      }
+      if (settled.error === 'not-paid') return { waiting: true, key };
+      if (!settled.ok) return { error: 'The deposit didn’t go through, so the time isn’t booked yet. Try again.' };
+      if (store.get('appointments', key).status === 'booked') return { ok: true, again: true, key };
+      await store.write('appointments', key, { status: 'booked', depositPaid: settled.ref });
+      await tell(appt, 'booked', { name: appt.name, ...appointmentWords(appt) });
       return { ok: true, key };
+    },
+
+    /** Backed out of the deposit's page: the time is let go, unless it was paid after all. */
+    async cancelDeposit(guest, key) {
+      const appt = keyOf('a').test(key ?? '') ? store.get('appointments', key) : null;
+      if (!guest || !appt || !owns(guest, appt)) return { error: 'That isn’t one of your appointments.' };
+      const done = await this.finishDeposit(key);
+      if (done.ok) return done;
+      if (store.get('appointments', key).status === 'paying') {
+        await letDepositGo(key, 'backed-out');
+      }
+      return { error: 'Nothing was charged, and the time is free again.', back: `/book/${appt.service}?date=${appt.date}` };
     },
 
     /** An appointment the guest made (or any, for the staff), or null. */
@@ -338,8 +408,11 @@ export async function createDesk({ db = ':memory:', sync, store, site: siteId = 
       if (freed.error) return { error: 'That time has already been given back.' };
       await store.write('appointments', key, { status: 'cancelled', cancelledAt: now(), cancelledBy: staff ? 'staff' : 'guest' });
       await refreshBusy(appt.date);
+      // A deposit comes back with a cancellation.
+      const refunded = appt.depositPaid ? await pay.refund({ id: `deposit/${key}` }) : null;
+      if (refunded) await store.write('appointments', key, { depositRefunded: refunded.ok ? refunded.cents : 0, depositRefundProblem: refunded.ok ? '' : refunded.error });
       await tell(appt, 'cancelled', { name: appt.name, what: appt.what, when: appt.when });
-      return { ok: true, appt };
+      return { ok: true, appt, refunded: Boolean(refunded?.ok), refundFailed: Boolean(refunded && !refunded.ok) };
     },
 
     /** The staff's day sheet: each person's bookings on a date, in order. */
@@ -357,6 +430,11 @@ export async function createDesk({ db = ':memory:', sync, store, site: siteId = 
 
     /** Let go of every hold whose time is up, so every page sees the time free. */
     async sweep() {
+      // A deposit's page left open too long: ask once more, then let the time go.
+      for (const appt of store.under('appointments').filter((one) => one.status === 'paying' && now() - one.at > PAYING_MS)) {
+        const done = await this.finishDeposit(appt.key);
+        if (!done.ok && store.get('appointments', appt.key).status === 'paying') await letDepositGo(appt.key, 'lapsed');
+      }
       const lapsed = await chairs.sweep();
       if (lapsed && on.appointments) for (const { date } of upcoming()) await refreshBusy(date);
       return lapsed;
@@ -427,7 +505,7 @@ export async function createDesk({ db = ':memory:', sync, store, site: siteId = 
     // ---- Giving ---------------------------------------------------------------------------------
     fund: () => (on.giving ? { id: site.fund.id, ...store.get('funds', site.fund.id) } : null),
     /** A gift, charged once even if the button is pressed twice (the key is made with the page). */
-    async give(guest, form) {
+    async give(guest, form, { back = '', cancel = '' } = {}) {
       if (!on.giving || !guest) return { error: 'Open the giving page again.' };
       const key = String(form.get('gift') ?? '');
       if (!keyOf('g').test(key)) return { error: 'Open the giving page again.' };
@@ -438,6 +516,15 @@ export async function createDesk({ db = ':memory:', sync, store, site: siteId = 
       if (!Number.isInteger(cents) || cents < 100 || cents > 1_000_000) return { error: 'Choose an amount from $1 to $10,000.' };
       const read = readFields([{ name: 'name', label: 'Your name', type: 'text', required: true }, { name: 'email', label: 'Email', type: 'email' }], form);
       if (read.error) return read;
+      if (back) {
+        const waiting = store.get('giving', key);
+        if (waiting && waiting.owner !== guest.pub) return { error: 'Open the giving page again.' };
+        if (!waiting || waiting.state !== 'paying') await store.write('giving', key, { state: 'paying', cents, name: read.values.name, email: read.values.email, owner: guest.pub, customer: guest.customer ?? '', at: now() });
+        const started = await pay.start({ id: `gift/${key}`, cents: store.get('giving', key).cents, description: site.fund.title, back: `${back}?gift=${key}`, cancel: cancel ? `${cancel}?gift=${key}` : '' });
+        if (started.error === 'paid') return this.finishGift(key);
+        if (!started.ok) return { error: 'Giving online isn’t working right now. Try again later.' };
+        return { ok: true, key, paying: true, pay: started.url ? { url: started.url } : { frame: started.frame, ref: started.ref } };
+      }
       const paid = await pay.pay({ id: `gift/${key}`, cents, method: { card: String(form.get('card') ?? '') }, description: `${site.fund.title} (test mode)` });
       if (!paid.ok) return { error: paid.error === 'declined' ? 'That card was declined. Try another.' : paid.error === 'in-progress' ? 'Your gift is already going through.' : 'That didn’t go through. Try again.' };
       await store.write('gifts', key, { fund: site.fund.id, cents, name: read.values.name, email: read.values.email, ref: paid.ref, owner: guest.pub, customer: guest.customer ?? '', at: now() });
@@ -446,6 +533,43 @@ export async function createDesk({ db = ':memory:', sync, store, site: siteId = 
       if (read.values.email) await notify.notify({ email: read.values.email }, 'thanks', { name: read.values.name, amount: `$${(cents / 100).toFixed(2)}`, fund: site.fund.title });
       return { ok: true, cents };
     },
+    /** Back from the platform's page, or its webhook: once it's paid, the gift counts, once. */
+    async finishGift(key, { told } = {}) {
+      const waiting = keyOf('g').test(key ?? '') ? store.get('giving', key) : null;
+      const given = waiting && store.get('gifts', key);
+      if (given) return { ok: true, again: true, cents: given.cents };
+      if (waiting?.state !== 'paying') return { error: waiting ? 'Nothing was charged.' : 'Open the giving page again.' };
+      const settled = await pay.settle({ id: `gift/${key}`, ...(told ? { ref: pay.paid(`gift/${key}`)?.ref, told } : {}) });
+      if (settled.error === 'not-paid') return { error: 'That payment didn’t go through, so nothing was charged.' };
+      if (!settled.ok) return { error: 'That didn’t go through. Try again.' };
+      if (settled.again || store.get('gifts', key)) return { ok: true, again: true, cents: waiting.cents };
+      // Marked given before any await, so a second way of hearing finds it done.
+      const done = store.write('giving', key, { state: 'given', at: now() });
+      const gift = store.write('gifts', key, { fund: site.fund.id, cents: waiting.cents, name: waiting.name, email: waiting.email, ref: settled.ref, owner: waiting.owner, customer: waiting.customer, at: now() });
+      const fund = store.get('funds', site.fund.id);
+      await Promise.all([done, gift, store.write('funds', site.fund.id, { raised: fund.raised + waiting.cents, gifts: fund.gifts + 1 })]);
+      if (waiting.email) await notify.notify({ email: waiting.email }, 'thanks', { name: waiting.name, amount: `$${(waiting.cents / 100).toFixed(2)}`, fund: site.fund.title });
+      return { ok: true, cents: waiting.cents };
+    },
+
+    /** The webhook from the platform: `{ headers, body, url }`, for a gift or a deposit. */
+    async heardGift(request) {
+      const settled = await pay.heard(request);
+      const [kind, key] = String(settled.id ?? '').split('/');
+      if (!settled.ok || !key) return settled;
+      return kind === 'deposit' ? this.finishDeposit(key) : this.finishGift(key);
+    },
+
+    /** Backed out of the platform's page: nothing given, and the platform isn't told to take it afterwards. */
+    async cancelGift(guest, key) {
+      const waiting = keyOf('g').test(key ?? '') ? store.get('giving', key) : null;
+      if (!guest || waiting?.owner !== guest.pub) return { error: 'Open the giving page again.' };
+      const done = await this.finishGift(key);
+      if (done.ok) return done;
+      await store.write('giving', key, { state: 'let-go', at: now() });
+      return { error: 'Nothing was charged.' };
+    },
+
     gifts: () => store.under('gifts').sort((a, b) => b.at - a.at),
 
     // ---- Forms and the inbox ------------------------------------------------------------------------

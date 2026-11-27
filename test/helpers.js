@@ -19,7 +19,7 @@ export const STAFF_COST = { N: 2 ** 10, r: 8, p: 1 };
 
 /** One business (`site`) on its own server at localhost, with an owner already set up. */
 export async function start(dir, site, { name = site, ...options } = {}) {
-  const server = await createApp({ tenants: [{ id: name, site, hosts: ['localhost'] }], dataDir: dir, cache: false, secret: 'test', staffCost: STAFF_COST, ...options });
+  const server = await createApp({ tenants: [{ id: name, site, hosts: ['localhost'] }], dataDir: dir, cache: false, secret: 'test-only-secret-that-is-long-enough-1234', staffCost: STAFF_COST, ...options });
   const [link] = await server.open();
   const space = await server.business(name);
   const made = await space.staff.accept(link.token, OWNER);
@@ -43,9 +43,20 @@ export async function device(browser, errors, site, name, { javaScriptEnabled = 
   page.on('pageerror', (error) => errors.push(`${name}: ${error.message}`));
   page.on('console', (message) => message.type() === 'error' && !/403/.test(message.text()) && errors.push(`${name}: ${message.text()}`));
   await page.goto(site.base);
+  // Sent on to the test payment page (standing in for PayPal's or Clover's): "Pay", or for the declining
+  // card "Go back without paying", then the way back.
   const post = async (path, form, headers = {}) => {
     const response = await context.request.post(`${site.base}${path}`, { form, headers, maxRedirects: 0 });
-    return { status: response.status(), location: plain(response.headers().location ?? '') };
+    const location = plain(response.headers().location ?? '');
+    if (!location.startsWith('/pay/test')) return { status: response.status(), location };
+    const page = await (await context.request.get(`${site.base}${location}`)).text();
+    assert.match(page, /Once (PayPal|Clover) is set up, this page is \1’s own\./);
+    const ref = new URL(location, site.base).searchParams.get('ref');
+    const next = String(form.card ?? '').replace(/\D/g, '') === '4000000000000002'
+      ? /href="([^"]+)">Go back without paying/.exec(page)[1].replaceAll('&amp;', '&')
+      : (await context.request.post(`${site.base}/pay/test`, { form: { ref, answer: 'pay' }, maxRedirects: 0 })).headers().location;
+    const back = await context.request.get(new URL(next, site.base).href, { maxRedirects: 0 });
+    return { status: back.status(), location: plain(back.headers().location ?? '') };
   };
   const get = async (path) => (await context.request.get(`${site.base}${path}`)).text();
   /** Every change the log will send this page, asking for `collections` and more. */

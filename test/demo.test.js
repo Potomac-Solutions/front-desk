@@ -31,7 +31,7 @@ before(async () => {
     ],
     dataDir: dir,
     cache: false,
-    secret: 'test',
+    secret: 'test-only-secret-that-is-long-enough-1234',
     staffCost: STAFF_COST,
     demo: true,
   });
@@ -110,7 +110,7 @@ test('the nightly reset exits once, at the reset hour, never in the first hour',
 });
 
 test('without DEMO, no demo sign-ins on the page', async () => {
-  const plain = await createApp({ tenants: [{ id: 'yough-valley-hair', site: 'desk', hosts: ['localhost'] }], dataDir: ':memory:', cache: false, secret: 'test', staffCost: STAFF_COST });
+  const plain = await createApp({ tenants: [{ id: 'yough-valley-hair', site: 'desk', hosts: ['localhost'] }], dataDir: ':memory:', cache: false, secret: 'test-only-secret-that-is-long-enough-1234', staffCost: STAFF_COST });
   assert.equal((await plain.open()).length, 1, 'a setup link, as usual');
   await new Promise((done) => plain.listen(0, done));
   const page = await (await fetch(`http://localhost:${plain.address().port}/staff`)).text();

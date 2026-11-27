@@ -46,7 +46,7 @@ The day sheet (`/staff`) is still where the desk works through today.
 
 **The salon**
 
-1. **Book.** Choose **Colour**, then Jess (Marco doesn't do colour), a day and a time. The time is held for you for ten minutes while you answer the colour questions; then **Book it**.
+1. **Book.** Choose **Colour**, then Jess (Marco doesn't do colour), a day and a time. The time is held for you for ten minutes while you answer the colour questions. Colour takes a $25 deposit to book, paid on Clover's page (until Clover is set up, the kit's test page: press **Pay**, or go back without paying and the time is let go). A cut, a beard trim or a kids' cut is booked at once, with nothing to pay.
 2. **Watch the times.** In the other window, open the same day: your time is struck out, without a reload. Hold a time in one window and it greys out in the other; **Let this time go** and it's back.
 3. **Anyone.** Book a cut with **Anyone**: a time stays open while either chair is free.
 4. **The front desk.** Open **Staff** from the footer and sign in as the owner. The day sheet shows each chair's bookings with the answers; cancel one and the time is free again at once. **Texts and emails sent** shows the confirmations that would have gone out.
@@ -55,10 +55,38 @@ The day sheet (`/staff`) is still where the desk works through today.
 **The fire company** (http://127.0.0.1:3000)
 
 1. **Sign up.** Open the CPR class and sign up for three places. The calendar in the other window counts down from 12 to 9, live. Cancel, and they're back.
-2. **Give.** Give to the engine fund with any card number (`4000 0000 0000 0002` is declined, to see that). The total on the home page moves in every open window.
+2. **Give.** Give to the engine fund on PayPal's page (until PayPal is set up, the kit's test page: press **Pay**, or go back without paying). The total on the home page moves in every open window.
 3. **Volunteer.** Send the volunteer form; the office sees it in the inbox.
 
 Without JavaScript (turn it off in the browser's settings), all of it works the same.
+
+## Paying
+
+Each business shows off a different platform. The card is typed on the platform's page, never here.
+
+- **The fire company: PayPal.** Gifts to the engine fund go to PayPal and count once PayPal says they're paid. Backing out gives nothing. PayPal takes the money when the customer comes back (or the webhook comes), not on its own page.
+- **The salon: Clover.** People pay at their visit, except colour, which takes a $25 deposit online to book. The chair is the customer's while they're on Clover's page, and the appointment is booked once Clover's signed webhook says the deposit is in. Clover has no call to ask about a payment, so coming back before the webhook shows a "Confirming your deposit" page that checks again by itself. Backing out, or leaving the page open for half an hour, lets the time go. Cancelling an appointment gives the deposit back. A deposit that arrives after the time was let go is given back too.
+
+Until a platform's settings are on the server, the kit's test page stands in. It is plainly a test, with no card and no money, and makes the same trip there and back. To use PayPal's test mode for the fire company, set these on Railway:
+
+| Setting | What |
+| --- | --- |
+| `PAY_PAYPAL_CLIENT`, `PAY_PAYPAL_SECRET` | A sandbox REST app's client id and secret (developer.paypal.com → Apps & Credentials, Sandbox) |
+| `PAY_PAYPAL_SANDBOX` | `1` |
+| `PAY_PAYPAL_WEBHOOK_ID` | Optional: a webhook for `CHECKOUT.ORDER.APPROVED` and `PAYMENT.CAPTURE.COMPLETED` at `https://fire-company.potomac.solutions/pay/webhook`, and its id |
+
+For Clover's sandbox on the salon:
+
+| Setting | What |
+| --- | --- |
+| `PAY_CLOVER_MERCHANT` | The sandbox test merchant's id |
+| `PAY_CLOVER_KEY` | The Ecommerce private key of a Hosted Checkout integration (sandbox Merchant Dashboard → Ecommerce API tokens) |
+| `PAY_CLOVER_WEBHOOK_SECRET` | The signing secret of a Hosted Checkout webhook at `https://salon.potomac.solutions/pay/webhook`. Required: it's the only way the salon learns a deposit is in |
+| `PAY_CLOVER_SANDBOX` | `1` |
+
+Which platform each business uses is set in `server.js` (`PLATFORMS`), so `PAY_PROVIDER` has no effect here. Keep the public demo on test keys: with live ones, real money moves. The Clover webhook's signature format is written from Clover's documentation and hasn't been tried against its sandbox yet. Clover only sends customers back to an `https` address, so try it on the deployed site, not on localhost.
+
+`SESSION_SECRET` must be at least 32 characters now (the kit refuses a shorter one).
 
 ## How it is put together
 
@@ -126,7 +154,7 @@ For a real business, leave out `DEMO`, set `DATA_DIR` to a mounted volume (the d
 
 The salon (`test/desk.test.js`):
 
-1. Without JavaScript: a service, a person who does it, a day and a time; held while the questions are answered (each one needed and checked); booked, with the confirmation sent. Someone else finds the time taken and can't see or cancel the booking; the front desk sees it with the answers.
+1. Without JavaScript: a service, a person who does it, a day and a time; held while the questions are answered (each one needed and checked); colour's deposit paid on the test page (standing in for Clover's), then booked, with the confirmation sent. Someone else finds the time taken and can't see or cancel the booking; the front desk sees it with the answers.
 2. A held time is nobody else's, nor is a booking that would run into it (one that ends where it begins is fine); choosing another time, or letting go, frees it.
 3. Two guests pressing the same time at the same moment: one holds it.
 4. Free times are live: holding and letting go show at once on an open page, including the earlier times a long booking would run into; with **Anyone**, a time stays open until both chairs are taken.
@@ -142,7 +170,7 @@ The fire company (`test/community.test.js`):
 1. Without JavaScript: the calendar; an open event needs no sign-up; signing up for places, once; the office sees who's coming; cancelling gives the places back.
 2. Places run out: never more than a party's limit or than are left; two parties for the last places at once, one gets in; no place is given twice; a double press signs up once.
 3. Places left are live on every open calendar.
-4. Giving: a declined card gives nothing; a gift is charged once even when pressed twice; the total moves live; amounts and names are checked, and a gift's page can't be reused by someone else.
+4. Giving: backing out of the payment page gives nothing; on PayPal (faked) a gift is approved there and taken once on the way back, and backed out first, PayPal is never told to take it; a gift is charged once even when pressed twice; the total moves live; amounts and names are checked, and a gift's page can't be reused by someone else.
 5. The volunteer form needs its tick box and a real choice; the hall form's numbers are checked.
 6. A page reads the events and the fund and nothing else; it writes nothing; the fire company has no appointments.
 

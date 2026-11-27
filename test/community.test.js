@@ -117,7 +117,7 @@ test('places left are live on every open calendar', async () => {
   await guest.context.close();
 });
 
-test('giving: a declined card gives nothing, a gift is charged once, and the total moves live', async () => {
+test('giving: backing out of the payment page gives nothing, a gift is charged once, and the total moves live', async () => {
   const watcher = await open('fund watcher');
   await watcher.page.waitForFunction(() => customElements.get('fund-progress'));
   await watcher.page.waitForTimeout(400);
@@ -127,16 +127,18 @@ test('giving: a declined card gives nothing, a gift is charged once, and the tot
   await giver.page.goto(`${app.base}/give`);
   const gift = await giver.page.locator('[name=gift]').getAttribute('value');
   const form = { gift, amount: '5000', name: 'Rosa Bittinger', email: 'rosa@example.com' };
-  assert.equal((await giver.post('/give', { ...form, card: '4000 0000 0000 0002' })).location, '/give?problem=That card was declined. Try another.');
+  assert.equal((await giver.post('/give', { ...form, card: '4000 0000 0000 0002' })).location, '/give?problem=Nothing was charged.');
   assert.equal(app.server.desk.fund().raised, 1_840_000);
   // Then the gift, from a fresh page.
   await giver.page.goto(`${app.base}/give`);
   await giver.page.fill('#f-name', 'Rosa Bittinger');
   await giver.page.fill('#f-email', 'rosa@example.com');
   await giver.page.fill('#f-other', '250');
-  await giver.page.fill('#f-card', '4242 4242 4242 4242');
+  assert.equal(await giver.page.locator('#f-card').count(), 0, 'no card is typed here');
   const key = await giver.page.locator('[name=gift]').getAttribute('value');
   await giver.page.click('form[action="/give"] button');
+  await giver.page.waitForURL(/\/pay\/test\?ref=/);
+  await giver.page.click('button:has-text("Pay $250.00")');
   await giver.page.waitForURL(/done=/);
   assert.match(await giver.page.locator('.ok').innerText(), /Thank you for your gift of \$250\.00/);
   await watcher.page.locator('fund-progress', { hasText: '$18,650 of $25,000' }).waitFor({ timeout: 5000 });

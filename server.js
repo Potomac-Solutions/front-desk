@@ -3,7 +3,8 @@
 // - Appointments: choose a service, who, a day and a time; the time is held while the guest
 //   fills in the details, then booked; free times grey out live on every page.
 // - Events: a calendar, with places that count down live as people sign up.
-// - Giving: a fund whose total moves live with every gift (test-mode payments).
+// - Giving: a fund whose total moves live with every gift, paid on PayPal's page (the kit's test
+//   page until PayPal is set up).
 // - Forms: an enquiry, a quote request or a sign-up sheet, to the staff inbox.
 // - Every form is a plain post to a route here, so it all works without JavaScript.
 // - One server runs several businesses, each chosen by the request's host name (the kit's
@@ -27,6 +28,7 @@ import { createTenants } from '@potomac-solutions/kit/tenant';
 import { createTenancy } from '@potomac-solutions/kit/tenancy';
 import { createDesk, deskSync, CONTACT, timeLabel, dateLabel } from './src/desk.js';
 import { sites } from './src/site.js';
+import { createPayments } from './src/payments.js';
 import { layout, escape } from './src/layout.js';
 import { shell } from './src/shell.js';
 import { landing } from './src/home.js';
@@ -67,20 +69,34 @@ export async function createApp({
   proxies = Number(process.env.TRUST_PROXIES ?? 0),
   // The public demo (src/demo.js): the seeded businesses, with their sign-ins shown and protected.
   demo = process.env.DEMO === '1',
+  // Paying: PAY_PROVIDER and its settings (src/payments.js). Tests pass their own.
+  payEnv = process.env,
+  payFetch,
 } = {}) {
   if (!secret) {
     if (process.env.NODE_ENV === 'production') throw new Error('Set SESSION_SECRET.');
-    secret = 'front-desk-development-only';
+    secret = 'front-desk-development-only-not-a-real-secret';
   }
   for (const tenant of tenants) if (!sites[tenant.site]) throw new TypeError(`${tenant.id}: no site called ${tenant.site}`);
   const directory = createTenants({ tenants });
   // Each business: its own log (a SQLite file), its desk and its staff, opened the first time
   // it's asked for.
+  // Each kind of business shows off a platform: PayPal for the fire company's gifts, Clover for
+  // the salon's colour deposits. Until a platform's settings are on the server, the kit's test
+  // page stands in. One per kind of business; each business keeps its own payments.
+  const PLATFORMS = { desk: 'clover', community: 'paypal' };
+  const paying = new Map();
+  const paymentsFor = (siteId) => {
+    const platform = PLATFORMS[siteId] ?? 'paypal';
+    if (!paying.has(platform)) paying.set(platform, createPayments({ env: { ...payEnv, PAY_PROVIDER: platform }, intended: platform, fetch: payFetch }));
+    return paying.get(platform);
+  };
+  const payments = paymentsFor(tenants[0]?.site);
   const tenancy = createTenancy({
     tenants: directory,
     open: (tenant) => deskSync({ db: dataDir === ':memory:' ? ':memory:' : join(dataDir, `${tenant.id}.db`) }),
     setup: async ({ tenant, sync, store }) => {
-      const desk = await createDesk({ sync, store, site: tenant.site, now, holdMs });
+      const desk = await createDesk({ sync, store, site: tenant.site, now, holdMs, provider: paymentsFor(tenant.site).provider });
       const staff = createStaff({ store, secure, now, ...(staffCost ? { cost: staffCost } : {}) });
       // Customers who make an account (kit/customers), in the business's own log.
       const customers = createCustomers({ store, secure, now, ...(staffCost ? { cost: staffCost } : {}) });
@@ -94,6 +110,8 @@ export async function createApp({
   function business({ desk, staff, customers }) {
   const { on } = desk;
   const site = desk.site;
+  const payments = paymentsFor(site.id);
+  const deposits = on.appointments && site.services.some((svc) => svc.deposit);
   const clockAt = (at) => new Date(at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: site.timeZone }).toLowerCase();
 
   const send = (res, status, html) => (res.writeHead(status, { 'content-type': 'text/html; charset=utf-8' }), res.end(html));
@@ -191,11 +209,23 @@ ${day ? `<section class="panel"><h2>${escape(day.label)}: choose a time</h2><p c
     return `<section class="page-head"><h1>Your details</h1><p class="lede">${escape(svc.name)} with ${escape(desk.person(holding.staff).name)}, ${escape(dateLabel(holding.date))} at ${escape(timeLabel(holding.time))}.</p></section>
 ${note(url)}
 <p class="bulletin">${holding.until ? `Held for you until ${escape(clockAt(holding.until))}.` : 'Your hold ran out, but you can still book it if nobody has taken it.'}</p>
-<form class="panel" method="post" action="/book/details">${fields([...CONTACT, ...svc.intake])}<button type="submit">Book it</button></form>
+<form class="panel" method="post" action="/book/details">${fields([...CONTACT, ...svc.intake])}${svc.deposit ? `<p class="hint">${escape(svc.name)} takes a ${dollars(svc.deposit)} deposit to book. It comes off the bill, and comes back if you cancel. ${escape(payments.line)}</p>` : ''}<button type="submit">${svc.deposit ? `Pay the ${dollars(svc.deposit)} deposit and book` : 'Book it'}</button></form>
 <form method="post" action="/book/letgo"><button class="button light" type="submit">Let this time go</button></form>`;
   }
 
+  /** Back from the deposit's page before the platform has said: look again every few seconds. */
+  function waitingPage(url, key) {
+    const again = `/pay/back?appt=${encodeURIComponent(key)}`;
+    const tries = Number(url.searchParams.get('try') ?? 0);
+    return `<section class="page-head"><h1>Confirming your deposit</h1><p class="lede" role="status">${tries < 20 ? 'Waiting for the payment platform to tell us it’s in. This page checks again by itself.' : 'The payment platform hasn’t told us yet. If you paid, it will come through; we’ll text you when it does.'}</p></section>
+<p><a class="button light" href="${escape(again)}">Check now</a></p>`;
+  }
+
   function appointmentPage(url, appt) {
+    if (appt.status === 'paying' || appt.status === 'let-go')
+      return `<section class="page-head"><h1>${appt.status === 'paying' ? 'Waiting for your deposit' : 'Not booked'}</h1><p class="lede">${escape(appt.what[0].toUpperCase() + appt.what.slice(1))}, ${escape(appt.when)}.</p></section>
+${note(url)}
+${appt.status === 'paying' ? `<p><a class="button light" href="/pay/back?appt=${appt.key}">Check on the deposit</a></p>` : `<p>The deposit didn’t come in, so the time was let go. Nothing was kept.</p><p><a class="go" href="/book/${appt.service}">Book another time</a></p>`}`;
     const cancelled = appt.status === 'cancelled';
     return `<section class="page-head"><h1>${cancelled ? 'Cancelled' : 'You’re booked'}</h1><p class="lede">${escape(appt.what[0].toUpperCase() + appt.what.slice(1))}, ${escape(appt.when)}.</p></section>
 ${note(url)}
@@ -250,8 +280,8 @@ ${note(url)}
   <div class="row">${site.givingAmounts.map((cents, i) => `<label class="check"><input type="radio" name="amount" value="${cents}"${i === 1 ? ' checked' : ''}> ${plainDollars(cents)}</label>`).join('')}</div>
   <label for="f-other">Or another amount, in dollars<input id="f-other" name="other" inputmode="decimal" maxlength="12"></label></fieldset>
   ${fields([{ name: 'name', label: 'Your name', type: 'text', required: true }, { name: 'email', label: 'Email, for a receipt', type: 'email' }])}
-  <label for="f-card">Card number<span class="hint">Test mode: nothing is charged. Any number works; 4000 0000 0000 0002 is declined.</span><input id="f-card" name="card" inputmode="numeric" autocomplete="cc-number" required></label>
-  <button type="submit">Give</button>
+  <p class="hint">${escape(payments.line)}</p>
+  <button type="submit">Continue to give</button>
 </form>`;
   }
 
@@ -311,6 +341,40 @@ ${sheet.map((one) => `<h3>${escape(one.name)}</h3>${one.appointments.length ? `<
     const staffHere = () => STAFF_LINKS.filter((href) => url.pathname === href || url.pathname.startsWith(`${href}/`)).sort((a, b) => b.length - a.length)[0] ?? '';
     const show = (p, title, body, { wide = false, ...options } = {}) => (wide ? shellPage(res, p, title, body, { here: staffHere(), ...options }) : page(res, p, title, body, { nav, ...options }));
     if (url.pathname.startsWith('/account') || url.pathname.startsWith('/admin')) res.setHeader('cache-control', 'no-store');
+    // Paying a gift on the platform's page: the test page, the way back, backing out, and the webhook.
+    if (on.giving || deposits) {
+      if (await payments.testRoute(req, res, url, readForm)) return;
+      // A colour's deposit: booked once it's in; while the platform hasn't said, a page that looks again.
+      if (deposits && (url.pathname === '/pay/back' || url.pathname === '/pay/cancel') && req.method === 'GET' && url.searchParams.has('appt')) {
+        const key = url.searchParams.get('appt') ?? '';
+        const done = url.pathname === '/pay/back' ? await desk.finishDeposit(key) : await desk.cancelDeposit(guest, key);
+        if (done.waiting) {
+          const tries = Number(url.searchParams.get('try') ?? 0);
+          // The key is checked by now (a[a-z0-9]+), so it's safe in the header.
+          if (tries < 20) res.setHeader('refresh', `3;url=/pay/back?appt=${done.key}&try=${tries + 1}`);
+          res.setHeader('cache-control', 'no-store');
+          return show(zubra.page(), 'Confirming your deposit', waitingPage(url, done.key), { status: 202 });
+        }
+        return back(res, done.ok ? withDone(`/a/${key}`, `Booked. Your deposit is in, and we’ve sent you a text to confirm.`) : withProblem(done.back ?? (desk.appointment(guest, key) ? `/a/${key}` : '/'), done));
+      }
+      if ((url.pathname === '/pay/back' || url.pathname === '/pay/cancel') && req.method === 'GET') {
+        const key = url.searchParams.get('gift') ?? '';
+        const done = url.pathname === '/pay/back' ? await desk.finishGift(key) : await desk.cancelGift(guest, key);
+        return back(res, done.ok ? withDone('/give', `Thank you for your gift of ${dollars(done.cents)}.`) : withProblem('/give', done));
+      }
+      if (url.pathname === '/pay/told' && req.method === 'POST') {
+        const form = await readForm(req);
+        if (!form) return send(res, 413, 'Too large');
+        const done = await desk.finishGift(String(form.get('gift') ?? ''), { told: String(form.get('told') ?? '') });
+        return back(res, done.ok ? withDone('/give', `Thank you for your gift of ${dollars(done.cents)}.`) : withProblem('/give', done));
+      }
+      if (url.pathname === '/pay/webhook' && req.method === 'POST') {
+        const request = await payments.webhook(req, origin(req));
+        if (!request) return send(res, 413, 'Too large');
+        const heard = await desk.heardGift(request);
+        return send(res, heard.error === 'bad-signature' ? 401 : 200, heard.error === 'bad-signature' ? 'Bad signature' : 'ok');
+      }
+    }
     if (req.method === 'POST') {
       // Every form is ours: another site's post is refused (the cookies are SameSite=Lax too).
       if (req.headers['sec-fetch-site'] === 'cross-site') return send(res, 403, 'Forbidden');
@@ -328,7 +392,8 @@ ${sheet.map((one) => `<h3>${escape(one.name)}</h3>${one.appointments.length ? `<
         return back(res, svc ? `/book/${svc}` : '/');
       }
       if (on.appointments && path === '/book/details') {
-        const done = await desk.book(guest, form);
+        const done = await desk.book(guest, form, { back: `${origin(req)}/pay/back`, cancel: `${origin(req)}/pay/cancel` });
+        if (done.paying) return payments.send(res, done.pay, { cancel: `/pay/cancel?appt=${done.key}` });
         return back(res, done.ok ? withDone(`/a/${done.key}`, 'Booked. We’ve sent you a text to confirm.') : withProblem(done.back ?? '/book/details', done));
       }
       const cancelling = path.match(/^\/a\/(a[a-z0-9]+)\/cancel$/);
@@ -347,7 +412,8 @@ ${sheet.map((one) => `<h3>${escape(one.name)}</h3>${one.appointments.length ? `<
         return back(res, done.ok ? withDone(`/r/${unsigning[1]}`, 'Cancelled. The places are back for someone else.') : withProblem(`/r/${unsigning[1]}`, done));
       }
       if (on.giving && path === '/give') {
-        const done = await desk.give(guest, form);
+        const done = await desk.give(guest, form, { back: `${origin(req)}/pay/back`, cancel: `${origin(req)}/pay/cancel` });
+        if (done.paying) return payments.send(res, done.pay, { cancel: `/pay/cancel?gift=${done.key}`, fields: { gift: done.key } });
         return back(res, done.ok ? withDone('/give', `Thank you for your gift of ${dollars(done.cents)}.`) : withProblem('/give', done));
       }
       const sending = path.match(/^\/forms\/([a-z-]+)$/);
@@ -593,7 +659,7 @@ ${sheet.map((one) => `<h3>${escape(one.name)}</h3>${one.appointments.length ? `<
     }
     return links;
   }
-  return Object.assign(server, { tenancy, open, demo, business: (id) => tenancy.spaceOf(id) });
+  return Object.assign(server, { tenancy, open, demo, payments, business: (id) => tenancy.spaceOf(id) });
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

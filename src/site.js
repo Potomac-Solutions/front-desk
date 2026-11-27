@@ -1,7 +1,8 @@
 // The two sites Front Desk starts with: one office that takes appointments, one community group
 // with a calendar and a fund. A business switches on the modules it needs; the code is the same.
 // The owner edits the words and prices from the admin's settings; `cents` is a service's typical
-// price, for the reports (the salon is paid in the chair, not online).
+// price, for the reports. The salon is paid in the chair; only colour, the long one, takes a
+// deposit online to book (`deposit`, in cents), on Clover's page.
 //
 // Made-up businesses in real towns, so the demo reads like the trade without being anyone's.
 //
@@ -57,6 +58,8 @@ export const sites = {
         price: 'From $85',
         cents: 8500,
         about: 'All-over colour or a refresh of the roots.',
+        // Paid online to book (on Clover's page), and taken off the bill. Cancel and it comes back.
+        deposit: 2500,
         intake: [
           { name: 'patch', label: 'Have you had a patch test with us in the last six months?', type: 'select', options: ['Yes', 'No'], required: true, hint: 'If not, we’ll do one at the start; it takes a minute.' },
           { name: 'last', label: 'When did you last colour your hair?', type: 'select', options: ['Never', 'In the last two months', 'Longer ago'], required: true },
