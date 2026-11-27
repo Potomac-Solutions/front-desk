@@ -64,8 +64,14 @@ test('without JavaScript: choose a service, a day and a time, answer the questio
   await page.fill('#f-email', ann.email);
   await page.selectOption('#f-patch', 'No');
   await page.selectOption('#f-last', 'Never');
+  // Colour takes a deposit, paid on Clover's page: the test page until Clover is set up.
+  assert.match(await page.locator('form[action="/book/details"]').innerText(), /Colour takes a \$25\.00 deposit to book[\s\S]*Once Clover is set up, it’s Clover’s own page\.[\s\S]*Pay the \$25\.00 deposit and book/);
   await page.click('form[action="/book/details"] button');
+  await page.waitForURL(/\/pay\/test\?ref=/);
+  assert.match(await page.locator('main').innerText(), /Test payment page[\s\S]*Deposit: Colour[\s\S]*\$25\.00/);
+  await page.click('button:text("Pay $25.00")');
   await page.waitForURL(/\/a\/a[a-z0-9]+\?done=/);
+  assert.match(await page.locator('main').innerText(), /Booked\. Your deposit is in/);
   assert.match(await page.locator('main').innerText(), /You’re booked[\s\S]*Colour with Jess, \w{3} \d{1,2} \w{3} at \d{1,2}:\d{2} [ap]m[\s\S]*Ann Teets[\s\S]*patch test[\s\S]*No/);
   const key = new URL(page.url()).pathname.split('/').pop();
   await page.goto(app.base);

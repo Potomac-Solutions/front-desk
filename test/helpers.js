@@ -43,14 +43,14 @@ export async function device(browser, errors, site, name, { javaScriptEnabled = 
   page.on('pageerror', (error) => errors.push(`${name}: ${error.message}`));
   page.on('console', (message) => message.type() === 'error' && !/403/.test(message.text()) && errors.push(`${name}: ${message.text()}`));
   await page.goto(site.base);
-  // Sent on to the test payment page (standing in for PayPal's): "Pay", or for the declining
+  // Sent on to the test payment page (standing in for PayPal's or Clover's): "Pay", or for the declining
   // card "Go back without paying", then the way back.
   const post = async (path, form, headers = {}) => {
     const response = await context.request.post(`${site.base}${path}`, { form, headers, maxRedirects: 0 });
     const location = plain(response.headers().location ?? '');
     if (!location.startsWith('/pay/test')) return { status: response.status(), location };
     const page = await (await context.request.get(`${site.base}${location}`)).text();
-    assert.match(page, /Once PayPal is set up, this page is PayPal’s own\./);
+    assert.match(page, /Once (PayPal|Clover) is set up, this page is \1’s own\./);
     const ref = new URL(location, site.base).searchParams.get('ref');
     const next = String(form.card ?? '').replace(/\D/g, '') === '4000000000000002'
       ? /href="([^"]+)">Go back without paying/.exec(page)[1].replaceAll('&amp;', '&')
